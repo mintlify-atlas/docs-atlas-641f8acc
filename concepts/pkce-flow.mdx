@@ -15,7 +15,7 @@ PKCE implements [RFC 7636](https://tools.ietf.org/html/rfc7636) for secure autho
 - **Single-page applications** - Browser-based apps
 - **Any public client** - Applications that cannot securely store secrets
 
-From [pkce.ts:7](/home/daytona/workspace/source/src/pkce/pkce.ts:7):
+From `pkce.ts:7`:
 
 ```typescript
 /**
@@ -40,7 +40,7 @@ const workos = new WorkOS({ clientId: 'client_...' });
 const verifier = workos.pkce.generateCodeVerifier(43); // Default length
 ```
 
-From [pkce.ts:20](/home/daytona/workspace/source/src/pkce/pkce.ts:20):
+From `pkce.ts:20`:
 
 ```typescript
 /**
@@ -72,7 +72,7 @@ A Base64URL-encoded SHA256 hash of the code verifier:
 const challenge = await workos.pkce.generateCodeChallenge(verifier);
 ```
 
-From [pkce.ts:34](/home/daytona/workspace/source/src/pkce/pkce.ts:34):
+From `pkce.ts:34`:
 
 ```typescript
 /**
@@ -109,7 +109,7 @@ console.log(pkce);
 // }
 ```
 
-From [pkce.ts:47](/home/daytona/workspace/source/src/pkce/pkce.ts:47):
+From `pkce.ts:47`:
 
 ```typescript
 /**
@@ -153,7 +153,7 @@ console.log('State:', state);
 console.log('Code Verifier:', codeVerifier);
 ```
 
-From [user-management.ts:1179](/home/daytona/workspace/source/src/user-management/user-management.ts:1179):
+From `user-management.ts:1179`:
 
 ```typescript
 /**
@@ -288,7 +288,7 @@ const { accessToken, refreshToken } =
 // Clear code verifier (one-time use)
 ```
 
-From [user-management.ts:331](/home/daytona/workspace/source/src/user-management/user-management.ts:331):
+From `user-management.ts:331`:
 
 ```typescript
 /**

@@ -28,7 +28,7 @@ Thrown when an API key is required but not provided.
 
 **When it occurs**: When attempting to call a server-side method without initializing the client with an API key.
 
-From [api-key-required.exception.ts:1](/home/daytona/workspace/source/src/common/exceptions/api-key-required.exception.ts:1):
+From `api-key-required.exception.ts:1`:
 
 ```typescript
 export class ApiKeyRequiredException extends Error {
@@ -71,7 +71,7 @@ Thrown when the API key is invalid or the request cannot be authorized.
 
 **When it occurs**: Invalid or expired API key, missing authentication credentials.
 
-From [unauthorized.exception.ts:3](/home/daytona/workspace/source/src/common/exceptions/unauthorized.exception.ts:3):
+From `unauthorized.exception.ts:3`:
 
 ```typescript
 export class UnauthorizedException extends Error implements RequestException {
@@ -111,7 +111,7 @@ Thrown when the request is malformed or contains invalid parameters.
 
 **When it occurs**: Invalid request parameters, malformed data, validation failures.
 
-From [bad-request.exception.ts:3](/home/daytona/workspace/source/src/common/exceptions/bad-request.exception.ts:3):
+From `bad-request.exception.ts:3`:
 
 ```typescript
 export class BadRequestException extends Error implements RequestException {
@@ -169,7 +169,7 @@ Thrown when the requested resource cannot be found.
 
 **When it occurs**: Accessing a resource that doesn't exist or has been deleted.
 
-From [not-found.exception.ts:3](/home/daytona/workspace/source/src/common/exceptions/not-found.exception.ts:3):
+From `not-found.exception.ts:3`:
 
 ```typescript
 export class NotFoundException extends Error implements RequestException {
@@ -223,7 +223,7 @@ Thrown when the request conflicts with the current state of the server.
 
 **When it occurs**: Attempting to create a resource that already exists, or modifying a resource that has been changed by another request.
 
-From [conflict.exception.ts:3](/home/daytona/workspace/source/src/common/exceptions/conflict.exception.ts:3):
+From `conflict.exception.ts:3`:
 
 ```typescript
 export class ConflictException extends Error implements RequestException {
@@ -280,7 +280,7 @@ Thrown when the request is well-formed but cannot be processed due to semantic e
 
 **When it occurs**: Business logic validation failures, unmet requirements.
 
-From [unprocessable-entity.exception.ts:4](/home/daytona/workspace/source/src/common/exceptions/unprocessable-entity.exception.ts:4):
+From `unprocessable-entity.exception.ts:4`:
 
 ```typescript
 export class UnprocessableEntityException
@@ -348,7 +348,7 @@ Thrown when the rate limit for API requests has been exceeded.
 
 **When it occurs**: Making too many requests in a short period.
 
-From [rate-limit-exceeded.exception.ts:7](/home/daytona/workspace/source/src/common/exceptions/rate-limit-exceeded.exception.ts:7):
+From `rate-limit-exceeded.exception.ts:7`:
 
 ```typescript
 export class RateLimitExceededException extends GenericServerException {
@@ -401,7 +401,7 @@ Thrown when OAuth authentication fails.
 
 **When it occurs**: OAuth flow errors, invalid grants, expired tokens.
 
-From [oauth.exception.ts:3](/home/daytona/workspace/source/src/common/exceptions/oauth.exception.ts:3):
+From `oauth.exception.ts:3`:
 
 ```typescript
 export class OauthException extends Error implements RequestException {
@@ -454,7 +454,7 @@ Thrown for general server errors that don't fit other categories.
 
 **When it occurs**: Internal server errors, service unavailable, unexpected errors.
 
-From [generic-server.exception.ts:3](/home/daytona/workspace/source/src/common/exceptions/generic-server.exception.ts:3):
+From `generic-server.exception.ts:3`:
 
 ```typescript
 export class GenericServerException extends Error implements RequestException {
@@ -501,7 +501,7 @@ Thrown when the response body cannot be parsed as JSON.
 
 **When it occurs**: Malformed JSON in API response, network corruption.
 
-From [parse-error.ts:3](/home/daytona/workspace/source/src/common/exceptions/parse-error.ts:3):
+From `parse-error.ts:3`:
 
 ```typescript
 export class ParseError extends Error implements RequestException {
@@ -552,7 +552,7 @@ try {
 
 The SDK handles errors in the `handleHttpError` method:
 
-From [workos.ts:430](/home/daytona/workspace/source/src/workos.ts:430):
+From `workos.ts:430`:
 
 ```typescript
 private handleHttpError({ path, error }: { path: string; error: unknown }) {

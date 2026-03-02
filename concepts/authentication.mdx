@@ -93,7 +93,7 @@ const response = await workos.userManagement.authenticateWithCode({
 });
 ```
 
-See the [workos.ts:331](/home/daytona/workspace/source/src/workos.ts:331) implementation for details.
+See the `workos.ts:331` implementation for details.
 
 ### Password authentication
 
@@ -176,7 +176,7 @@ The SDK automatically resolves the client ID from multiple sources:
 2. Provided during WorkOS initialization
 3. `WORKOS_CLIENT_ID` environment variable
 
-From [workos.ts:127](/home/daytona/workspace/source/src/workos.ts:127):
+From `workos.ts:127`:
 
 ```typescript
 this.clientId = this.options.clientId;
@@ -192,7 +192,7 @@ The SDK automatically manages authorization headers:
 - **API key authentication**: Adds `Authorization: Bearer sk_...` to all requests
 - **Access token authentication**: Can be passed explicitly for user-scoped operations
 
-From [workos.ts:203](/home/daytona/workspace/source/src/workos.ts:203):
+From `workos.ts:203`:
 
 ```typescript
 if (this.key) {
