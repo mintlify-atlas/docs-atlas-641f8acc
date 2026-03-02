@@ -1,0 +1,498 @@
+---
+title: Handling Webhooks
+description: Securely receive and verify webhook events from WorkOS
+---
+
+This guide covers receiving, verifying, and processing webhook events from WorkOS to keep your application in sync with changes in WorkOS.
+
+## Prerequisites
+
+```bash
+npm install @workos-inc/node
+```
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+```
+
+## Understanding Webhooks
+
+WorkOS sends webhook events to notify your application about important changes:
+
+- User and group changes in Directory Sync
+- Authentication events
+- Organization updates
+- Connection status changes
+
+Each webhook includes a signature header for verification to ensure events are genuinely from WorkOS.
+
+## Setting Up Webhook Endpoint
+
+<Steps>
+  <Step title="Create Webhook Endpoint">
+    Create an endpoint to receive webhook events:
+
+    ```typescript
+    import express from 'express';
+    import { WorkOS } from '@workos-inc/node';
+
+    const app = express();
+    const workos = new WorkOS(process.env.WORKOS_API_KEY);
+
+    // Important: Use express.json() middleware
+    app.use(express.json());
+
+    app.post('/webhooks/workos', async (req, res) => {
+      try {
+        const webhook = await workos.webhooks.constructEvent({
+          payload: req.body,
+          sigHeader: req.headers['workos-signature'] as string,
+          secret: process.env.WORKOS_WEBHOOK_SECRET
+        });
+
+        console.log('Webhook event:', webhook.event);
+        console.log('Event data:', webhook.data);
+
+        // Process the event
+        await handleWebhookEvent(webhook);
+
+        res.sendStatus(200);
+      } catch (error) {
+        console.error('Webhook verification failed:', error);
+        res.sendStatus(400);
+      }
+    });
+
+    app.listen(3000);
+    ```
+  </Step>
+
+  <Step title="Verify Webhook Signatures">
+    Always verify webhook signatures to ensure authenticity:
+
+    ```typescript
+    const webhook = await workos.webhooks.constructEvent({
+      payload: req.body,
+      sigHeader: req.headers['workos-signature'] as string,
+      secret: process.env.WORKOS_WEBHOOK_SECRET,
+      tolerance: 180000  // Optional: 180 seconds (default)
+    });
+    ```
+
+    The `constructEvent` method:
+    - Verifies the signature hash
+    - Checks the timestamp is within tolerance
+    - Deserializes the event data
+    - Throws `SignatureVerificationException` if verification fails
+  </Step>
+
+  <Step title="Handle Different Event Types">
+    Process different webhook events:
+
+    ```typescript
+    async function handleWebhookEvent(webhook: Event) {
+      switch (webhook.event) {
+        case 'dsync.user.created':
+          await handleUserCreated(webhook.data);
+          break;
+
+        case 'dsync.user.updated':
+          await handleUserUpdated(webhook.data);
+          break;
+
+        case 'dsync.user.deleted':
+          await handleUserDeleted(webhook.data);
+          break;
+
+        case 'dsync.group.user_added':
+          await handleUserAddedToGroup(webhook.data);
+          break;
+
+        case 'dsync.group.user_removed':
+          await handleUserRemovedFromGroup(webhook.data);
+          break;
+
+        default:
+          console.log('Unhandled event type:', webhook.event);
+      }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Common Webhook Events
+
+### Directory Sync Events
+
+#### User Events
+
+```typescript
+// dsync.user.created
+await workos.webhooks.constructEvent({
+  payload: req.body,
+  sigHeader: req.headers['workos-signature'],
+  secret: process.env.WORKOS_WEBHOOK_SECRET
+});
+
+if (webhook.event === 'dsync.user.created') {
+  console.log('New user:', webhook.data.id);
+  console.log('Email:', webhook.data.email);
+  console.log('First name:', webhook.data.firstName);
+  console.log('Last name:', webhook.data.lastName);
+  console.log('State:', webhook.data.state);
+  console.log('Groups:', webhook.data.groups);
+  console.log('Directory:', webhook.data.directoryId);
+  console.log('Organization:', webhook.data.organizationId);
+}
+```
+
+#### Group Events
+
+```typescript
+switch (webhook.event) {
+  case 'dsync.group.created':
+    console.log('Group created:', webhook.data.name);
+    break;
+
+  case 'dsync.group.updated':
+    console.log('Group updated:', webhook.data.name);
+    break;
+
+  case 'dsync.group.deleted':
+    console.log('Group deleted:', webhook.data.id);
+    break;
+
+  case 'dsync.group.user_added':
+    console.log('User added to group');
+    console.log('User ID:', webhook.data.id);
+    console.log('Groups:', webhook.data.groups);
+    break;
+
+  case 'dsync.group.user_removed':
+    console.log('User removed from group');
+    console.log('User ID:', webhook.data.id);
+    break;
+}
+```
+
+### Connection Events
+
+```typescript
+if (webhook.event === 'connection.activated') {
+  console.log('Connection activated:', webhook.data.id);
+  console.log('Connection type:', webhook.data.connectionType);
+  console.log('Organization:', webhook.data.organizationId);
+}
+
+if (webhook.event === 'connection.deactivated') {
+  console.log('Connection deactivated:', webhook.data.id);
+}
+```
+
+## Advanced Verification
+
+### Manual Signature Verification
+
+If you need more control over verification:
+
+```typescript
+try {
+  await workos.webhooks.verifyHeader({
+    payload: req.body,
+    sigHeader: req.headers['workos-signature'] as string,
+    secret: process.env.WORKOS_WEBHOOK_SECRET,
+    tolerance: 180000
+  });
+
+  // Signature is valid, process the webhook
+  const webhook = req.body;
+  await handleWebhookEvent(webhook);
+} catch (error) {
+  console.error('Signature verification failed:', error);
+  res.sendStatus(400);
+}
+```
+
+### Compute Signature
+
+Compute a signature for testing:
+
+```typescript
+const timestamp = Date.now();
+const signature = await workos.webhooks.computeSignature(
+  timestamp,
+  req.body,
+  process.env.WORKOS_WEBHOOK_SECRET
+);
+
+console.log('Expected signature:', signature);
+```
+
+### Parse Signature Header
+
+Extract timestamp and signature from header:
+
+```typescript
+const { timestamp, signatureHash } = 
+  workos.webhooks.getTimestampAndSignatureHash(
+    req.headers['workos-signature'] as string
+  );
+
+console.log('Timestamp:', timestamp);
+console.log('Signature:', signatureHash);
+```
+
+## Error Handling
+
+```typescript
+import { SignatureVerificationException } from '@workos-inc/node';
+
+app.post('/webhooks/workos', async (req, res) => {
+  try {
+    const webhook = await workos.webhooks.constructEvent({
+      payload: req.body,
+      sigHeader: req.headers['workos-signature'] as string,
+      secret: process.env.WORKOS_WEBHOOK_SECRET
+    });
+
+    await processWebhook(webhook);
+    res.sendStatus(200);
+  } catch (error) {
+    if (error instanceof SignatureVerificationException) {
+      console.error('Invalid webhook signature');
+      return res.sendStatus(401);
+    }
+
+    console.error('Webhook processing error:', error);
+    res.sendStatus(500);
+  }
+});
+```
+
+## Best Practices
+
+### 1. Respond Quickly
+
+Respond with 200 OK as soon as you receive the webhook. Process events asynchronously:
+
+```typescript
+app.post('/webhooks/workos', async (req, res) => {
+  try {
+    const webhook = await workos.webhooks.constructEvent({
+      payload: req.body,
+      sigHeader: req.headers['workos-signature'] as string,
+      secret: process.env.WORKOS_WEBHOOK_SECRET
+    });
+
+    // Respond immediately
+    res.sendStatus(200);
+
+    // Process asynchronously
+    processWebhookAsync(webhook).catch(console.error);
+  } catch (error) {
+    res.sendStatus(400);
+  }
+});
+```
+
+### 2. Handle Duplicates
+
+Webhook events may be delivered more than once. Use the event ID to track processed events:
+
+```typescript
+const processedEvents = new Set();
+
+async function processWebhook(webhook: Event) {
+  if (processedEvents.has(webhook.id)) {
+    console.log('Duplicate event, skipping:', webhook.id);
+    return;
+  }
+
+  processedEvents.add(webhook.id);
+
+  // Process the event
+  await handleWebhookEvent(webhook);
+}
+```
+
+### 3. Implement Retries
+
+If processing fails, WorkOS will retry with exponential backoff. Ensure your endpoint is idempotent:
+
+```typescript
+async function handleUserCreated(user: any) {
+  // Check if user already exists
+  const existing = await db.users.findOne({ directoryUserId: user.id });
+
+  if (existing) {
+    // Update instead of creating
+    return db.users.update(existing.id, { ...user });
+  }
+
+  // Create new user
+  return db.users.create({ directoryUserId: user.id, ...user });
+}
+```
+
+### 4. Secure Your Endpoint
+
+Always verify signatures and use HTTPS in production:
+
+```typescript
+if (process.env.NODE_ENV === 'production' && !req.secure) {
+  return res.status(403).send('HTTPS required');
+}
+
+try {
+  await workos.webhooks.verifyHeader({
+    payload: req.body,
+    sigHeader: req.headers['workos-signature'] as string,
+    secret: process.env.WORKOS_WEBHOOK_SECRET
+  });
+} catch (error) {
+  return res.status(401).send('Invalid signature');
+}
+```
+
+## Testing Webhooks
+
+Test webhook handling locally:
+
+```typescript
+import crypto from 'crypto';
+
+// Generate test webhook
+function generateTestWebhook() {
+  const timestamp = Date.now();
+  const payload = {
+    id: 'wh_test_123',
+    event: 'dsync.user.created',
+    data: {
+      id: 'directory_user_123',
+      email: 'test@example.com',
+      firstName: 'Test',
+      lastName: 'User',
+      state: 'active',
+      directoryId: 'directory_123',
+      organizationId: 'org_123',
+      groups: []
+    }
+  };
+
+  const secret = process.env.WORKOS_WEBHOOK_SECRET;
+  const unhashedString = `${timestamp}.${JSON.stringify(payload)}`;
+  const signatureHash = crypto
+    .createHmac('sha256', secret)
+    .update(unhashedString)
+    .digest('hex');
+
+  return {
+    payload,
+    headers: {
+      'workos-signature': `t=${timestamp}, v1=${signatureHash}`
+    }
+  };
+}
+
+// Test your webhook handler
+const { payload, headers } = generateTestWebhook();
+const webhook = await workos.webhooks.constructEvent({
+  payload,
+  sigHeader: headers['workos-signature'],
+  secret: process.env.WORKOS_WEBHOOK_SECRET
+});
+
+console.log('Test webhook verified:', webhook.event);
+```
+
+## Complete Example
+
+```typescript
+import express from 'express';
+import { WorkOS, SignatureVerificationException } from '@workos-inc/node';
+
+const app = express();
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+
+app.use(express.json());
+
+app.post('/webhooks/workos', async (req, res) => {
+  try {
+    const webhook = await workos.webhooks.constructEvent({
+      payload: req.body,
+      sigHeader: req.headers['workos-signature'] as string,
+      secret: process.env.WORKOS_WEBHOOK_SECRET
+    });
+
+    // Respond immediately
+    res.sendStatus(200);
+
+    // Process asynchronously
+    processWebhook(webhook).catch(error => {
+      console.error('Webhook processing failed:', error);
+    });
+  } catch (error) {
+    if (error instanceof SignatureVerificationException) {
+      console.error('Invalid webhook signature');
+      return res.sendStatus(401);
+    }
+
+    console.error('Webhook error:', error);
+    res.sendStatus(400);
+  }
+});
+
+const processedEvents = new Set<string>();
+
+async function processWebhook(webhook: any) {
+  // Prevent duplicate processing
+  if (processedEvents.has(webhook.id)) {
+    console.log('Duplicate event:', webhook.id);
+    return;
+  }
+
+  processedEvents.add(webhook.id);
+
+  // Handle different event types
+  switch (webhook.event) {
+    case 'dsync.user.created':
+      await db.users.create({
+        directoryUserId: webhook.data.id,
+        email: webhook.data.email,
+        firstName: webhook.data.firstName,
+        lastName: webhook.data.lastName,
+        state: webhook.data.state,
+        organizationId: webhook.data.organizationId
+      });
+      console.log('User created:', webhook.data.email);
+      break;
+
+    case 'dsync.user.updated':
+      await db.users.update(
+        { directoryUserId: webhook.data.id },
+        {
+          email: webhook.data.email,
+          firstName: webhook.data.firstName,
+          lastName: webhook.data.lastName,
+          state: webhook.data.state
+        }
+      );
+      console.log('User updated:', webhook.data.email);
+      break;
+
+    case 'dsync.user.deleted':
+      await db.users.delete({ directoryUserId: webhook.data.id });
+      console.log('User deleted:', webhook.data.id);
+      break;
+
+    default:
+      console.log('Unhandled event type:', webhook.event);
+  }
+}
+
+app.listen(3000, () => {
+  console.log('Webhook server running on port 3000');
+});
+```

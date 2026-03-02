@@ -1,0 +1,1115 @@
+---
+title: Authorization API
+description: Manage roles, permissions, and authorization checks
+---
+
+The Authorization API provides a comprehensive role-based access control (RBAC) system with support for environment roles, organization roles, permissions, resources, and role assignments.
+
+## Initialize
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_example_123456789');
+```
+
+## Environment Roles
+
+Environment roles are global roles that apply across your entire WorkOS environment.
+
+### createEnvironmentRole
+
+Create a new environment role.
+
+```typescript
+const role = await workos.authorization.createEnvironmentRole({
+  slug: 'admin',
+  name: 'Administrator',
+  description: 'Full system access',
+  resourceTypeSlug: 'project',
+  permissions: ['read', 'write', 'delete'],
+});
+```
+
+<ParamField path="options" type="CreateEnvironmentRoleOptions" required>
+  <Expandable title="properties">
+    <ParamField path="slug" type="string" required>
+      Unique identifier for the role.
+    </ParamField>
+    <ParamField path="name" type="string" required>
+      Display name of the role.
+    </ParamField>
+    <ParamField path="description" type="string" optional>
+      Description of the role.
+    </ParamField>
+    <ParamField path="resourceTypeSlug" type="string" required>
+      Type of resource this role applies to.
+    </ParamField>
+    <ParamField path="permissions" type="string[]" optional>
+      Array of permission slugs.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="role" type="EnvironmentRole">
+  The created environment role.
+</ResponseField>
+
+---
+
+### listEnvironmentRoles
+
+Retrieve all environment roles.
+
+```typescript
+const roleList = await workos.authorization.listEnvironmentRoles();
+
+console.log(roleList.data);
+```
+
+<ResponseField name="roleList" type="EnvironmentRoleList">
+  <Expandable title="properties">
+    <ResponseField name="object" type="'list'">
+      Object type identifier.
+    </ResponseField>
+    <ResponseField name="data" type="EnvironmentRole[]">
+      Array of environment roles.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+### getEnvironmentRole
+
+Retrieve an environment role by slug.
+
+```typescript
+const role = await workos.authorization.getEnvironmentRole('admin');
+```
+
+<ParamField path="slug" type="string" required>
+  The unique slug of the environment role.
+</ParamField>
+
+<ResponseField name="role" type="EnvironmentRole">
+  The environment role object.
+</ResponseField>
+
+---
+
+### updateEnvironmentRole
+
+Update an environment role.
+
+```typescript
+const role = await workos.authorization.updateEnvironmentRole('admin', {
+  name: 'Super Administrator',
+  description: 'Updated description',
+});
+```
+
+<ParamField path="slug" type="string" required>
+  The unique slug of the environment role.
+</ParamField>
+
+<ParamField path="options" type="UpdateEnvironmentRoleOptions" required>
+  <Expandable title="properties">
+    <ParamField path="name" type="string" optional>
+      Updated display name.
+    </ParamField>
+    <ParamField path="description" type="string" optional>
+      Updated description.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="role" type="EnvironmentRole">
+  The updated environment role.
+</ResponseField>
+
+---
+
+### setEnvironmentRolePermissions
+
+Set permissions for an environment role (replaces existing permissions).
+
+```typescript
+const role = await workos.authorization.setEnvironmentRolePermissions('admin', {
+  permissions: ['read', 'write', 'delete', 'admin'],
+});
+```
+
+<ParamField path="slug" type="string" required>
+  The unique slug of the environment role.
+</ParamField>
+
+<ParamField path="options" type="SetEnvironmentRolePermissionsOptions" required>
+  <Expandable title="properties">
+    <ParamField path="permissions" type="string[]" required>
+      Array of permission slugs to set.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="role" type="EnvironmentRole">
+  The updated environment role.
+</ResponseField>
+
+---
+
+### addEnvironmentRolePermission
+
+Add a single permission to an environment role.
+
+```typescript
+const role = await workos.authorization.addEnvironmentRolePermission('admin', {
+  permissionSlug: 'export',
+});
+```
+
+<ParamField path="slug" type="string" required>
+  The unique slug of the environment role.
+</ParamField>
+
+<ParamField path="options" type="AddEnvironmentRolePermissionOptions" required>
+  <Expandable title="properties">
+    <ParamField path="permissionSlug" type="string" required>
+      The permission slug to add.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="role" type="EnvironmentRole">
+  The updated environment role.
+</ResponseField>
+
+---
+
+## Organization Roles
+
+Organization roles are scoped to specific organizations.
+
+### createOrganizationRole
+
+Create a new organization role.
+
+```typescript
+const role = await workos.authorization.createOrganizationRole('org_123', {
+  slug: 'member',
+  name: 'Member',
+  description: 'Standard member access',
+  resourceTypeSlug: 'project',
+  permissions: ['read', 'write'],
+});
+```
+
+<ParamField path="organizationId" type="string" required>
+  The ID of the organization.
+</ParamField>
+
+<ParamField path="options" type="CreateOrganizationRoleOptions" required>
+  <Expandable title="properties">
+    <ParamField path="slug" type="string" required>
+      Unique identifier for the role.
+    </ParamField>
+    <ParamField path="name" type="string" required>
+      Display name of the role.
+    </ParamField>
+    <ParamField path="description" type="string" optional>
+      Description of the role.
+    </ParamField>
+    <ParamField path="resourceTypeSlug" type="string" required>
+      Type of resource this role applies to.
+    </ParamField>
+    <ParamField path="permissions" type="string[]" optional>
+      Array of permission slugs.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="role" type="OrganizationRole">
+  The created organization role.
+</ResponseField>
+
+---
+
+### listOrganizationRoles
+
+Retrieve all roles for an organization.
+
+```typescript
+const roleList = await workos.authorization.listOrganizationRoles('org_123');
+
+console.log(roleList.data);
+```
+
+<ParamField path="organizationId" type="string" required>
+  The ID of the organization.
+</ParamField>
+
+<ResponseField name="roleList" type="RoleList">
+  List of organization roles.
+</ResponseField>
+
+---
+
+### getOrganizationRole
+
+Retrieve an organization role by slug.
+
+```typescript
+const role = await workos.authorization.getOrganizationRole('org_123', 'member');
+```
+
+<ParamField path="organizationId" type="string" required>
+  The ID of the organization.
+</ParamField>
+
+<ParamField path="slug" type="string" required>
+  The unique slug of the role.
+</ParamField>
+
+<ResponseField name="role" type="Role">
+  The organization role object.
+</ResponseField>
+
+---
+
+### updateOrganizationRole
+
+Update an organization role.
+
+```typescript
+const role = await workos.authorization.updateOrganizationRole('org_123', 'member', {
+  name: 'Team Member',
+  description: 'Updated description',
+});
+```
+
+<ParamField path="organizationId" type="string" required>
+  The ID of the organization.
+</ParamField>
+
+<ParamField path="slug" type="string" required>
+  The unique slug of the role.
+</ParamField>
+
+<ParamField path="options" type="UpdateOrganizationRoleOptions" required>
+  <Expandable title="properties">
+    <ParamField path="name" type="string" optional>
+      Updated display name.
+    </ParamField>
+    <ParamField path="description" type="string" optional>
+      Updated description.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="role" type="OrganizationRole">
+  The updated organization role.
+</ResponseField>
+
+---
+
+### deleteOrganizationRole
+
+Delete an organization role.
+
+```typescript
+await workos.authorization.deleteOrganizationRole('org_123', 'member');
+```
+
+<ParamField path="organizationId" type="string" required>
+  The ID of the organization.
+</ParamField>
+
+<ParamField path="slug" type="string" required>
+  The unique slug of the role to delete.
+</ParamField>
+
+---
+
+### setOrganizationRolePermissions
+
+Set permissions for an organization role.
+
+```typescript
+const role = await workos.authorization.setOrganizationRolePermissions('org_123', 'member', {
+  permissions: ['read', 'write'],
+});
+```
+
+<ParamField path="organizationId" type="string" required>
+  The ID of the organization.
+</ParamField>
+
+<ParamField path="slug" type="string" required>
+  The unique slug of the role.
+</ParamField>
+
+<ParamField path="options" type="SetOrganizationRolePermissionsOptions" required>
+  <Expandable title="properties">
+    <ParamField path="permissions" type="string[]" required>
+      Array of permission slugs to set.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="role" type="OrganizationRole">
+  The updated organization role.
+</ResponseField>
+
+---
+
+### addOrganizationRolePermission
+
+Add a permission to an organization role.
+
+```typescript
+const role = await workos.authorization.addOrganizationRolePermission('org_123', 'member', {
+  permissionSlug: 'delete',
+});
+```
+
+<ParamField path="organizationId" type="string" required>
+  The ID of the organization.
+</ParamField>
+
+<ParamField path="slug" type="string" required>
+  The unique slug of the role.
+</ParamField>
+
+<ParamField path="options" type="AddOrganizationRolePermissionOptions" required>
+  <Expandable title="properties">
+    <ParamField path="permissionSlug" type="string" required>
+      The permission slug to add.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="role" type="OrganizationRole">
+  The updated organization role.
+</ResponseField>
+
+---
+
+### removeOrganizationRolePermission
+
+Remove a permission from an organization role.
+
+```typescript
+await workos.authorization.removeOrganizationRolePermission('org_123', 'member', {
+  permissionSlug: 'delete',
+});
+```
+
+<ParamField path="organizationId" type="string" required>
+  The ID of the organization.
+</ParamField>
+
+<ParamField path="slug" type="string" required>
+  The unique slug of the role.
+</ParamField>
+
+<ParamField path="options" type="RemoveOrganizationRolePermissionOptions" required>
+  <Expandable title="properties">
+    <ParamField path="permissionSlug" type="string" required>
+      The permission slug to remove.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+---
+
+## Permissions
+
+### createPermission
+
+Create a new permission.
+
+```typescript
+const permission = await workos.authorization.createPermission({
+  slug: 'read',
+  name: 'Read',
+  description: 'Read access',
+  resourceTypeSlug: 'project',
+});
+```
+
+<ParamField path="options" type="CreatePermissionOptions" required>
+  <Expandable title="properties">
+    <ParamField path="slug" type="string" required>
+      Unique identifier for the permission.
+    </ParamField>
+    <ParamField path="name" type="string" required>
+      Display name of the permission.
+    </ParamField>
+    <ParamField path="description" type="string" optional>
+      Description of the permission.
+    </ParamField>
+    <ParamField path="resourceTypeSlug" type="string" required>
+      Type of resource this permission applies to.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="permission" type="Permission">
+  The created permission.
+</ResponseField>
+
+---
+
+### listPermissions
+
+Retrieve all permissions.
+
+```typescript
+const permissionList = await workos.authorization.listPermissions({
+  resourceTypeSlug: 'project',
+});
+
+console.log(permissionList.data);
+```
+
+<ParamField path="options" type="ListPermissionsOptions" optional>
+  <Expandable title="properties">
+    <ParamField path="resourceTypeSlug" type="string" optional>
+      Filter by resource type.
+    </ParamField>
+    <ParamField path="before" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+    <ParamField path="after" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="permissionList" type="PermissionList">
+  List of permissions with pagination metadata.
+</ResponseField>
+
+---
+
+### getPermission
+
+Retrieve a permission by slug.
+
+```typescript
+const permission = await workos.authorization.getPermission('read');
+```
+
+<ParamField path="slug" type="string" required>
+  The unique slug of the permission.
+</ParamField>
+
+<ResponseField name="permission" type="Permission">
+  The permission object.
+</ResponseField>
+
+---
+
+### updatePermission
+
+Update a permission.
+
+```typescript
+const permission = await workos.authorization.updatePermission('read', {
+  name: 'Read Access',
+  description: 'Updated description',
+});
+```
+
+<ParamField path="slug" type="string" required>
+  The unique slug of the permission.
+</ParamField>
+
+<ParamField path="options" type="UpdatePermissionOptions" required>
+  <Expandable title="properties">
+    <ParamField path="name" type="string" optional>
+      Updated display name.
+    </ParamField>
+    <ParamField path="description" type="string" optional>
+      Updated description.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="permission" type="Permission">
+  The updated permission.
+</ResponseField>
+
+---
+
+### deletePermission
+
+Delete a permission.
+
+```typescript
+await workos.authorization.deletePermission('read');
+```
+
+<ParamField path="slug" type="string" required>
+  The unique slug of the permission to delete.
+</ParamField>
+
+---
+
+## Resources
+
+### createResource
+
+Create a new authorization resource.
+
+```typescript
+const resource = await workos.authorization.createResource({
+  externalId: 'project_123',
+  name: 'My Project',
+  description: 'A sample project',
+  resourceTypeSlug: 'project',
+  organizationId: 'org_123',
+  parentResourceId: 'parent_resource_123',
+});
+```
+
+<ParamField path="options" type="CreateAuthorizationResourceOptions" required>
+  <Expandable title="properties">
+    <ParamField path="externalId" type="string" required>
+      Your system's identifier for this resource.
+    </ParamField>
+    <ParamField path="name" type="string" required>
+      Display name of the resource.
+    </ParamField>
+    <ParamField path="description" type="string" optional>
+      Description of the resource.
+    </ParamField>
+    <ParamField path="resourceTypeSlug" type="string" required>
+      Type of resource.
+    </ParamField>
+    <ParamField path="organizationId" type="string" required>
+      ID of the organization.
+    </ParamField>
+    <ParamField path="parentResourceId" type="string" optional>
+      ID of the parent resource (use this OR parentResourceExternalId).
+    </ParamField>
+    <ParamField path="parentResourceExternalId" type="string" optional>
+      External ID of the parent resource.
+    </ParamField>
+    <ParamField path="parentResourceTypeSlug" type="string" optional>
+      Type slug of the parent resource (required with parentResourceExternalId).
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="resource" type="AuthorizationResource">
+  The created authorization resource.
+</ResponseField>
+
+---
+
+### getResource
+
+Retrieve a resource by ID.
+
+```typescript
+const resource = await workos.authorization.getResource('resource_123');
+```
+
+<ParamField path="resourceId" type="string" required>
+  The unique identifier of the resource.
+</ParamField>
+
+<ResponseField name="resource" type="AuthorizationResource">
+  The authorization resource object.
+</ResponseField>
+
+---
+
+### getResourceByExternalId
+
+Retrieve a resource by external ID.
+
+```typescript
+const resource = await workos.authorization.getResourceByExternalId({
+  organizationId: 'org_123',
+  resourceTypeSlug: 'project',
+  externalId: 'project_123',
+});
+```
+
+<ParamField path="options" type="GetAuthorizationResourceByExternalIdOptions" required>
+  <Expandable title="properties">
+    <ParamField path="organizationId" type="string" required>
+      The ID of the organization.
+    </ParamField>
+    <ParamField path="resourceTypeSlug" type="string" required>
+      The resource type slug.
+    </ParamField>
+    <ParamField path="externalId" type="string" required>
+      Your system's identifier for the resource.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="resource" type="AuthorizationResource">
+  The authorization resource object.
+</ResponseField>
+
+---
+
+### listResources
+
+Retrieve a list of resources.
+
+```typescript
+const resourceList = await workos.authorization.listResources({
+  organizationId: 'org_123',
+  resourceTypeSlug: 'project',
+});
+
+console.log(resourceList.data);
+```
+
+<ParamField path="options" type="ListAuthorizationResourcesOptions" optional>
+  <Expandable title="properties">
+    <ParamField path="organizationId" type="string" optional>
+      Filter by organization ID.
+    </ParamField>
+    <ParamField path="resourceTypeSlug" type="string" optional>
+      Filter by resource type.
+    </ParamField>
+    <ParamField path="before" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+    <ParamField path="after" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="resourceList" type="AuthorizationResourceList">
+  List of authorization resources with pagination metadata.
+</ResponseField>
+
+---
+
+### updateResource
+
+Update a resource by ID.
+
+```typescript
+const resource = await workos.authorization.updateResource({
+  resourceId: 'resource_123',
+  name: 'Updated Project Name',
+  description: 'Updated description',
+});
+```
+
+<ParamField path="options" type="UpdateAuthorizationResourceOptions" required>
+  <Expandable title="properties">
+    <ParamField path="resourceId" type="string" required>
+      The ID of the resource to update.
+    </ParamField>
+    <ParamField path="name" type="string" optional>
+      Updated name.
+    </ParamField>
+    <ParamField path="description" type="string" optional>
+      Updated description.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="resource" type="AuthorizationResource">
+  The updated authorization resource.
+</ResponseField>
+
+---
+
+### updateResourceByExternalId
+
+Update a resource by external ID.
+
+```typescript
+const resource = await workos.authorization.updateResourceByExternalId({
+  organizationId: 'org_123',
+  resourceTypeSlug: 'project',
+  externalId: 'project_123',
+  name: 'Updated Project Name',
+});
+```
+
+<ParamField path="options" type="UpdateAuthorizationResourceByExternalIdOptions" required>
+  <Expandable title="properties">
+    <ParamField path="organizationId" type="string" required>
+      The ID of the organization.
+    </ParamField>
+    <ParamField path="resourceTypeSlug" type="string" required>
+      The resource type slug.
+    </ParamField>
+    <ParamField path="externalId" type="string" required>
+      Your system's identifier for the resource.
+    </ParamField>
+    <ParamField path="name" type="string" optional>
+      Updated name.
+    </ParamField>
+    <ParamField path="description" type="string" optional>
+      Updated description.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="resource" type="AuthorizationResource">
+  The updated authorization resource.
+</ResponseField>
+
+---
+
+### deleteResource
+
+Delete a resource by ID.
+
+```typescript
+await workos.authorization.deleteResource({
+  resourceId: 'resource_123',
+  cascadeDelete: true,
+});
+```
+
+<ParamField path="options" type="DeleteAuthorizationResourceOptions" required>
+  <Expandable title="properties">
+    <ParamField path="resourceId" type="string" required>
+      The ID of the resource to delete.
+    </ParamField>
+    <ParamField path="cascadeDelete" type="boolean" optional>
+      Whether to delete child resources.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+---
+
+### deleteResourceByExternalId
+
+Delete a resource by external ID.
+
+```typescript
+await workos.authorization.deleteResourceByExternalId({
+  organizationId: 'org_123',
+  resourceTypeSlug: 'project',
+  externalId: 'project_123',
+  cascadeDelete: true,
+});
+```
+
+<ParamField path="options" type="DeleteAuthorizationResourceByExternalIdOptions" required>
+  <Expandable title="properties">
+    <ParamField path="organizationId" type="string" required>
+      The ID of the organization.
+    </ParamField>
+    <ParamField path="resourceTypeSlug" type="string" required>
+      The resource type slug.
+    </ParamField>
+    <ParamField path="externalId" type="string" required>
+      Your system's identifier for the resource.
+    </ParamField>
+    <ParamField path="cascadeDelete" type="boolean" optional>
+      Whether to delete child resources.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+---
+
+## Authorization Checks
+
+### check
+
+Check if a user has a specific permission on a resource.
+
+```typescript
+const result = await workos.authorization.check({
+  organizationMembershipId: 'om_123',
+  permissionSlug: 'read',
+  resourceId: 'resource_123',
+});
+
+console.log(result.authorized); // true or false
+```
+
+<ParamField path="options" type="AuthorizationCheckOptions" required>
+  <Expandable title="properties">
+    <ParamField path="organizationMembershipId" type="string" required>
+      The organization membership ID to check.
+    </ParamField>
+    <ParamField path="permissionSlug" type="string" required>
+      The permission to check for.
+    </ParamField>
+    <ParamField path="resourceId" type="string" optional>
+      The resource ID (use this OR externalId).
+    </ParamField>
+    <ParamField path="resourceExternalId" type="string" optional>
+      The resource external ID.
+    </ParamField>
+    <ParamField path="resourceTypeSlug" type="string" optional>
+      The resource type slug (required with resourceExternalId).
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="result" type="AuthorizationCheckResult">
+  <Expandable title="properties">
+    <ResponseField name="authorized" type="boolean">
+      Whether the check passed.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## Role Assignments
+
+### assignRole
+
+Assign a role to a user for a specific resource.
+
+```typescript
+const assignment = await workos.authorization.assignRole({
+  organizationMembershipId: 'om_123',
+  roleSlug: 'admin',
+  resourceId: 'resource_123',
+});
+```
+
+<ParamField path="options" type="AssignRoleOptions" required>
+  <Expandable title="properties">
+    <ParamField path="organizationMembershipId" type="string" required>
+      The organization membership ID.
+    </ParamField>
+    <ParamField path="roleSlug" type="string" required>
+      The role slug to assign.
+    </ParamField>
+    <ParamField path="resourceId" type="string" optional>
+      The resource ID (use this OR externalId).
+    </ParamField>
+    <ParamField path="resourceExternalId" type="string" optional>
+      The resource external ID.
+    </ParamField>
+    <ParamField path="resourceTypeSlug" type="string" optional>
+      The resource type slug (required with resourceExternalId).
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="assignment" type="RoleAssignment">
+  The created role assignment.
+</ResponseField>
+
+---
+
+### listRoleAssignments
+
+Retrieve role assignments for a user.
+
+```typescript
+const assignments = await workos.authorization.listRoleAssignments({
+  organizationMembershipId: 'om_123',
+});
+
+console.log(assignments.data);
+```
+
+<ParamField path="options" type="ListRoleAssignmentsOptions" required>
+  <Expandable title="properties">
+    <ParamField path="organizationMembershipId" type="string" required>
+      The organization membership ID.
+    </ParamField>
+    <ParamField path="before" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+    <ParamField path="after" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="assignments" type="RoleAssignmentList">
+  List of role assignments with pagination metadata.
+</ResponseField>
+
+---
+
+### removeRole
+
+Remove a role assignment.
+
+```typescript
+await workos.authorization.removeRole({
+  organizationMembershipId: 'om_123',
+  roleSlug: 'admin',
+  resourceId: 'resource_123',
+});
+```
+
+<ParamField path="options" type="RemoveRoleOptions" required>
+  <Expandable title="properties">
+    <ParamField path="organizationMembershipId" type="string" required>
+      The organization membership ID.
+    </ParamField>
+    <ParamField path="roleSlug" type="string" required>
+      The role slug to remove.
+    </ParamField>
+    <ParamField path="resourceId" type="string" optional>
+      The resource ID (use this OR externalId).
+    </ParamField>
+    <ParamField path="resourceExternalId" type="string" optional>
+      The resource external ID.
+    </ParamField>
+    <ParamField path="resourceTypeSlug" type="string" optional>
+      The resource type slug (required with resourceExternalId).
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+---
+
+### removeRoleAssignment
+
+Remove a role assignment by ID.
+
+```typescript
+await workos.authorization.removeRoleAssignment({
+  organizationMembershipId: 'om_123',
+  roleAssignmentId: 'ra_123',
+});
+```
+
+<ParamField path="options" type="RemoveRoleAssignmentOptions" required>
+  <Expandable title="properties">
+    <ParamField path="organizationMembershipId" type="string" required>
+      The organization membership ID.
+    </ParamField>
+    <ParamField path="roleAssignmentId" type="string" required>
+      The role assignment ID to remove.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+---
+
+## Resource Queries
+
+### listResourcesForMembership
+
+List resources a user has access to.
+
+```typescript
+const resources = await workos.authorization.listResourcesForMembership({
+  organizationMembershipId: 'om_123',
+  resourceTypeSlug: 'project',
+});
+
+console.log(resources.data);
+```
+
+<ParamField path="options" type="ListResourcesForMembershipOptions" required>
+  <Expandable title="properties">
+    <ParamField path="organizationMembershipId" type="string" required>
+      The organization membership ID.
+    </ParamField>
+    <ParamField path="resourceTypeSlug" type="string" optional>
+      Filter by resource type.
+    </ParamField>
+    <ParamField path="permissionSlug" type="string" optional>
+      Filter by permission.
+    </ParamField>
+    <ParamField path="before" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+    <ParamField path="after" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="resources" type="AuthorizationResourceList">
+  List of resources the user has access to.
+</ResponseField>
+
+---
+
+### listMembershipsForResource
+
+List users who have access to a resource.
+
+```typescript
+const memberships = await workos.authorization.listMembershipsForResource({
+  resourceId: 'resource_123',
+});
+
+console.log(memberships.data);
+```
+
+<ParamField path="options" type="ListMembershipsForResourceOptions" required>
+  <Expandable title="properties">
+    <ParamField path="resourceId" type="string" required>
+      The resource ID.
+    </ParamField>
+    <ParamField path="permissionSlug" type="string" optional>
+      Filter by permission.
+    </ParamField>
+    <ParamField path="before" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+    <ParamField path="after" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="memberships" type="AuthorizationOrganizationMembershipList">
+  List of organization memberships with access to the resource.
+</ResponseField>
+
+---
+
+### listMembershipsForResourceByExternalId
+
+List users who have access to a resource by external ID.
+
+```typescript
+const memberships = await workos.authorization.listMembershipsForResourceByExternalId({
+  organizationId: 'org_123',
+  resourceTypeSlug: 'project',
+  externalId: 'project_123',
+});
+
+console.log(memberships.data);
+```
+
+<ParamField path="options" type="ListMembershipsForResourceByExternalIdOptions" required>
+  <Expandable title="properties">
+    <ParamField path="organizationId" type="string" required>
+      The organization ID.
+    </ParamField>
+    <ParamField path="resourceTypeSlug" type="string" required>
+      The resource type slug.
+    </ParamField>
+    <ParamField path="externalId" type="string" required>
+      The resource external ID.
+    </ParamField>
+    <ParamField path="permissionSlug" type="string" optional>
+      Filter by permission.
+    </ParamField>
+    <ParamField path="before" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+    <ParamField path="after" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="memberships" type="AuthorizationOrganizationMembershipList">
+  List of organization memberships with access to the resource.
+</ResponseField>

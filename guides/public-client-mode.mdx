@@ -1,0 +1,407 @@
+---
+title: "Public Client Mode (PKCE)"
+description: "Using the WorkOS Node SDK in browser, mobile, CLI, and Electron apps with PKCE authentication"
+---
+
+The WorkOS Node SDK supports **public client mode** for applications that cannot securely store API keys, such as browser apps, mobile apps, CLI tools, and Electron applications. This mode uses PKCE (Proof Key for Code Exchange) to secure the OAuth 2.0 flow without requiring a client secret.
+
+## When to Use Public Client Mode
+
+Use public client mode when:
+- Building browser-based applications (SPAs)
+- Developing mobile apps (iOS, Android, React Native)
+- Creating CLI tools
+- Building desktop apps (Electron, Tauri)
+- Any environment where source code is accessible to end users
+
+<Warning>
+Never embed API keys (`sk_...`) in client-side code. API keys grant full access to your WorkOS resources and cannot be rotated without rebuilding your app.
+</Warning>
+
+## Initialization
+
+For public clients, initialize WorkOS with only a `clientId` (no API key):
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS({ clientId: 'client_...' });
+```
+
+<Note>
+The SDK automatically detects public client mode when no API key is provided and adjusts its behavior accordingly.
+</Note>
+
+## Authentication Flow
+
+### Step 1: Generate Authorization URL with PKCE
+
+Use `getAuthorizationUrlWithPKCE()` to automatically generate PKCE parameters:
+
+```typescript
+const { url, codeVerifier, state } = 
+  await workos.userManagement.getAuthorizationUrlWithPKCE({
+    provider: 'authkit',
+    redirectUri: 'myapp://callback',
+    clientId: 'client_...',
+  });
+```
+
+This method:
+- Generates a cryptographically secure `codeVerifier`
+- Derives the `codeChallenge` using SHA-256
+- Automatically generates a `state` parameter for CSRF protection
+- Returns the complete authorization URL
+
+<Warning>
+**Critical:** Store `codeVerifier` and `state` securely on-device. These values must survive app restarts during the authentication flow.
+</Warning>
+
+### Step 2: Redirect User to Authorization URL
+
+```typescript
+// Web: Redirect browser
+window.location.href = url;
+
+// Mobile: Open system browser
+await Linking.openURL(url); // React Native
+
+// CLI: Open default browser
+open(url); // using 'open' package
+
+// Electron: Open in system browser or in-app browser
+shell.openExternal(url);
+```
+
+### Step 3: Handle Callback
+
+After user authentication, WorkOS redirects back with an authorization code:
+
+```
+myapp://callback?code=01ABCDEF...&state=random_state
+```
+
+Validate the state parameter to prevent CSRF attacks:
+
+```typescript
+if (callbackState !== storedState) {
+  throw new Error('State mismatch - possible CSRF attack');
+}
+```
+
+### Step 4: Exchange Code for Tokens
+
+```typescript
+const { accessToken, refreshToken, user } = 
+  await workos.userManagement.authenticateWithCode({
+    code: authorizationCode,
+    codeVerifier: storedCodeVerifier,
+    clientId: 'client_...',
+  });
+```
+
+The SDK automatically uses PKCE flow when:
+- No API key is configured, OR
+- A `codeVerifier` is provided
+
+## Platform-Specific Examples
+
+### React Native Mobile App
+
+```typescript
+import { Linking } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS({ clientId: 'client_...' });
+
+// Step 1: Generate auth URL and store verifier securely
+async function startAuth() {
+  const { url, codeVerifier, state } = 
+    await workos.userManagement.getAuthorizationUrlWithPKCE({
+      provider: 'authkit',
+      redirectUri: 'myapp://callback',
+    });
+
+  // Store in secure device storage
+  await SecureStore.setItemAsync('pkce_verifier', codeVerifier);
+  await SecureStore.setItemAsync('pkce_state', state);
+
+  // Open system browser
+  await Linking.openURL(url);
+}
+
+// Step 2: Handle deep link callback
+Linking.addEventListener('url', async ({ url }) => {
+  const { queryParams } = Linking.parse(url);
+  const { code, state } = queryParams;
+
+  // Validate state
+  const storedState = await SecureStore.getItemAsync('pkce_state');
+  if (state !== storedState) {
+    throw new Error('State mismatch');
+  }
+
+  // Exchange code for tokens
+  const codeVerifier = await SecureStore.getItemAsync('pkce_verifier');
+  const { accessToken, refreshToken, user } = 
+    await workos.userManagement.authenticateWithCode({
+      code,
+      codeVerifier,
+    });
+
+  // Store tokens securely
+  await SecureStore.setItemAsync('access_token', accessToken);
+  await SecureStore.setItemAsync('refresh_token', refreshToken);
+});
+```
+
+<Note>
+**iOS Keychain / Android Keystore:** Always use platform secure storage APIs. For React Native, use `expo-secure-store` or `react-native-keychain`.
+</Note>
+
+### CLI Application
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+import open from 'open';
+import http from 'http';
+
+const workos = new WorkOS({ clientId: 'client_...' });
+
+async function authenticate() {
+  // Start local server to receive callback
+  const server = http.createServer();
+  const port = 8080;
+  
+  const { url, codeVerifier, state } = 
+    await workos.userManagement.getAuthorizationUrlWithPKCE({
+      provider: 'authkit',
+      redirectUri: `http://localhost:${port}/callback`,
+    });
+
+  console.log('Opening browser for authentication...');
+  await open(url);
+
+  return new Promise((resolve, reject) => {
+    server.on('request', async (req, res) => {
+      const urlParams = new URL(req.url!, `http://localhost:${port}`);
+      const code = urlParams.searchParams.get('code');
+      const callbackState = urlParams.searchParams.get('state');
+
+      if (callbackState !== state) {
+        res.end('Authentication failed: state mismatch');
+        reject(new Error('State mismatch'));
+        server.close();
+        return;
+      }
+
+      try {
+        const { accessToken, refreshToken, user } = 
+          await workos.userManagement.authenticateWithCode({
+            code: code!,
+            codeVerifier,
+          });
+
+        res.end('Authentication successful! You can close this window.');
+        server.close();
+        resolve({ accessToken, refreshToken, user });
+      } catch (error) {
+        res.end('Authentication failed');
+        reject(error);
+        server.close();
+      }
+    });
+
+    server.listen(port);
+  });
+}
+
+const { accessToken, user } = await authenticate();
+console.log(`Authenticated as ${user.email}`);
+```
+
+### Electron Desktop App
+
+```typescript
+// In main process
+import { shell, BrowserWindow } from 'electron';
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS({ clientId: 'client_...' });
+
+let authWindow: BrowserWindow | null = null;
+
+async function authenticate() {
+  const { url, codeVerifier, state } = 
+    await workos.userManagement.getAuthorizationUrlWithPKCE({
+      provider: 'authkit',
+      redirectUri: 'myapp://callback',
+    });
+
+  // Store in memory (or electron-store for persistence)
+  global.pkceData = { codeVerifier, state };
+
+  // Open in system browser
+  shell.openExternal(url);
+  
+  // Or open in-app window
+  authWindow = new BrowserWindow({
+    width: 500,
+    height: 700,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  });
+  
+  authWindow.loadURL(url);
+  
+  // Listen for redirect
+  authWindow.webContents.on('will-redirect', async (event, url) => {
+    if (url.startsWith('myapp://callback')) {
+      event.preventDefault();
+      
+      const urlObj = new URL(url);
+      const code = urlObj.searchParams.get('code');
+      const callbackState = urlObj.searchParams.get('state');
+      
+      if (callbackState !== global.pkceData.state) {
+        throw new Error('State mismatch');
+      }
+      
+      const { accessToken, refreshToken, user } = 
+        await workos.userManagement.authenticateWithCode({
+          code: code!,
+          codeVerifier: global.pkceData.codeVerifier,
+        });
+      
+      authWindow?.close();
+      // Store tokens and proceed
+    }
+  });
+}
+```
+
+## Token Refresh
+
+Public clients can refresh access tokens without a client secret:
+
+```typescript
+const { accessToken, refreshToken } = 
+  await workos.userManagement.authenticateWithRefreshToken({
+    refreshToken: storedRefreshToken,
+    clientId: 'client_...',
+  });
+```
+
+The SDK automatically omits `client_secret` when no API key is configured.
+
+## Security Best Practices
+
+<Steps>
+  <Step title="Use HTTPS/Custom Schemes">
+    For web apps, use `https://` redirect URIs. For mobile/desktop, use custom URL schemes (`myapp://`) or universal/app links.
+  </Step>
+  
+  <Step title="Secure Storage">
+    - **Mobile:** iOS Keychain, Android Keystore
+    - **Desktop:** OS credential managers (Keychain, Credential Manager, Secret Service)
+    - **CLI:** OS keyring libraries
+    - **Never:** localStorage, AsyncStorage, plain files
+  </Step>
+  
+  <Step title="Validate State Parameter">
+    Always verify the `state` parameter matches to prevent CSRF attacks.
+  </Step>
+  
+  <Step title="Handle Token Expiration">
+    Implement automatic token refresh before access tokens expire:
+    
+    ```typescript
+    async function getValidAccessToken() {
+      const { accessToken, expiresAt } = await getStoredTokens();
+      
+      // Refresh 5 minutes before expiration
+      if (Date.now() >= expiresAt - 5 * 60 * 1000) {
+        const refreshed = await workos.userManagement.authenticateWithRefreshToken({
+          refreshToken: storedRefreshToken,
+        });
+        await storeTokens(refreshed);
+        return refreshed.accessToken;
+      }
+      
+      return accessToken;
+    }
+    ```
+  </Step>
+  
+  <Step title="Implement Logout">
+    Clear stored tokens and credentials on logout:
+    
+    ```typescript
+    async function logout() {
+      await SecureStore.deleteItemAsync('access_token');
+      await SecureStore.deleteItemAsync('refresh_token');
+    }
+    ```
+  </Step>
+</Steps>
+
+## Defense in Depth: PKCE with Confidential Clients
+
+Server-side apps can also use PKCE alongside client secrets for additional security (recommended by OAuth 2.1):
+
+```typescript
+const workos = new WorkOS('sk_...'); // With API key
+
+// Use PKCE even with API key
+const { url, codeVerifier } = 
+  await workos.userManagement.getAuthorizationUrlWithPKCE({
+    provider: 'authkit',
+    redirectUri: 'https://example.com/callback',
+  });
+
+// Both client_secret AND code_verifier will be sent
+const { accessToken } = await workos.userManagement.authenticateWithCode({
+  code: authorizationCode,
+  codeVerifier,
+});
+```
+
+This provides defense in depth:
+- **PKCE** prevents authorization code interception
+- **Client secret** authenticates your backend
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Error: codeVerifier cannot be an empty string">
+    Ensure you're passing the actual `codeVerifier` string returned from `getAuthorizationUrlWithPKCE()`, not an empty string or undefined.
+  </Accordion>
+  
+  <Accordion title="Error: clientId is required">
+    Public client mode requires a client ID. Initialize WorkOS with:
+    ```typescript
+    new WorkOS({ clientId: 'client_...' })
+    ```
+  </Accordion>
+  
+  <Accordion title="Error: invalid_grant (PKCE verification failed)">
+    The `codeVerifier` doesn't match the original challenge. Ensure you:
+    1. Store the `codeVerifier` immediately after generating the URL
+    2. Use the same `codeVerifier` value when exchanging the code
+    3. Don't regenerate the PKCE parameters between steps
+  </Accordion>
+  
+  <Accordion title="Code verifier lost after app restart">
+    Store the `codeVerifier` in persistent secure storage, not just in memory. Use platform-specific secure storage APIs.
+  </Accordion>
+</AccordionGroup>
+
+## API Reference
+
+See the source code for implementation details:
+- `getAuthorizationUrlWithPKCE()` - src/user-management/user-management.ts:1179
+- `authenticateWithCode()` - src/user-management/user-management.ts:331
+- `authenticateWithRefreshToken()` - src/user-management/user-management.ts:413

@@ -1,0 +1,1176 @@
+---
+title: "UserManagement API"
+description: "Manage users, authentication, sessions, and organization memberships"
+---
+
+The `UserManagement` class provides comprehensive methods for user authentication, user lifecycle management, session handling, and organization membership management.
+
+## User Methods
+
+### getUser
+
+Retrieves a user by their ID.
+
+<ParamField path="userId" type="string" required>
+  The unique identifier of the user
+</ParamField>
+
+<ResponseField name="user" type="User">
+  <ResponseField name="id" type="string">
+    Unique identifier for the user
+  </ResponseField>
+  <ResponseField name="email" type="string">
+    User's email address
+  </ResponseField>
+  <ResponseField name="emailVerified" type="boolean">
+    Whether the user's email has been verified
+  </ResponseField>
+  <ResponseField name="firstName" type="string | null">
+    User's first name
+  </ResponseField>
+  <ResponseField name="lastName" type="string | null">
+    User's last name
+  </ResponseField>
+  <ResponseField name="profilePictureUrl" type="string | null">
+    URL to user's profile picture
+  </ResponseField>
+  <ResponseField name="createdAt" type="string">
+    ISO 8601 timestamp of user creation
+  </ResponseField>
+  <ResponseField name="updatedAt" type="string">
+    ISO 8601 timestamp of last update
+  </ResponseField>
+  <ResponseField name="externalId" type="string | null">
+    External identifier from your system
+  </ResponseField>
+  <ResponseField name="metadata" type="Record<string, string>">
+    Custom metadata associated with the user
+  </ResponseField>
+</ResponseField>
+
+```typescript
+const user = await workos.userManagement.getUser('user_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5');
+console.log(user.email);
+```
+
+### getUserByExternalId
+
+Retrieves a user by their external ID.
+
+<ParamField path="externalId" type="string" required>
+  The external identifier of the user
+</ParamField>
+
+<ResponseField name="user" type="User">
+  Returns the same User object as `getUser`
+</ResponseField>
+
+```typescript
+const user = await workos.userManagement.getUserByExternalId('ext_12345');
+```
+
+### listUsers
+
+Retrieves a paginated list of users.
+
+<ParamField body="email" type="string">
+  Filter by email address
+</ParamField>
+
+<ParamField body="organizationId" type="string">
+  Filter by organization ID
+</ParamField>
+
+<ParamField body="limit" type="number">
+  Number of results to return (default: 10)
+</ParamField>
+
+<ParamField body="before" type="string">
+  Cursor for pagination (previous page)
+</ParamField>
+
+<ParamField body="after" type="string">
+  Cursor for pagination (next page)
+</ParamField>
+
+<ResponseField name="users" type="AutoPaginatable<User>">
+  Paginated list of users
+</ResponseField>
+
+```typescript
+const users = await workos.userManagement.listUsers({
+  organizationId: 'org_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5',
+  limit: 20
+});
+
+for await (const user of users) {
+  console.log(user.email);
+}
+```
+
+### createUser
+
+Creates a new user.
+
+<ParamField body="email" type="string" required>
+  User's email address
+</ParamField>
+
+<ParamField body="password" type="string">
+  User's password (plain text, will be hashed)
+</ParamField>
+
+<ParamField body="passwordHash" type="string">
+  Pre-hashed password
+</ParamField>
+
+<ParamField body="passwordHashType" type="PasswordHashType">
+  Type of password hash (e.g., 'bcrypt', 'firebase-scrypt')
+</ParamField>
+
+<ParamField body="firstName" type="string">
+  User's first name
+</ParamField>
+
+<ParamField body="lastName" type="string">
+  User's last name
+</ParamField>
+
+<ParamField body="emailVerified" type="boolean">
+  Whether the email is already verified
+</ParamField>
+
+<ParamField body="externalId" type="string">
+  External identifier from your system
+</ParamField>
+
+<ParamField body="metadata" type="Record<string, string>">
+  Custom metadata to associate with the user
+</ParamField>
+
+<ResponseField name="user" type="User">
+  The created user object
+</ResponseField>
+
+```typescript
+const user = await workos.userManagement.createUser({
+  email: 'user@example.com',
+  password: 'securePassword123',
+  firstName: 'Jane',
+  lastName: 'Doe',
+  emailVerified: false,
+  metadata: { department: 'engineering' }
+});
+```
+
+### updateUser
+
+Updates an existing user.
+
+<ParamField body="userId" type="string" required>
+  The ID of the user to update
+</ParamField>
+
+<ParamField body="firstName" type="string">
+  Updated first name
+</ParamField>
+
+<ParamField body="lastName" type="string">
+  Updated last name
+</ParamField>
+
+<ParamField body="emailVerified" type="boolean">
+  Updated email verification status
+</ParamField>
+
+<ParamField body="metadata" type="Record<string, string>">
+  Updated metadata
+</ParamField>
+
+<ResponseField name="user" type="User">
+  The updated user object
+</ResponseField>
+
+```typescript
+const user = await workos.userManagement.updateUser({
+  userId: 'user_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5',
+  firstName: 'Jane',
+  metadata: { department: 'product' }
+});
+```
+
+### deleteUser
+
+Deletes a user.
+
+<ParamField path="userId" type="string" required>
+  The ID of the user to delete
+</ParamField>
+
+```typescript
+await workos.userManagement.deleteUser('user_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5');
+```
+
+## Authentication Methods
+
+### authenticateWithPassword
+
+Authenticates a user with email and password.
+
+<ParamField body="email" type="string" required>
+  User's email address
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  User's password
+</ParamField>
+
+<ParamField body="clientId" type="string">
+  OAuth client ID (optional if configured globally)
+</ParamField>
+
+<ParamField body="session" type="AuthenticateWithSessionOptions">
+  Session options for sealing the session
+</ParamField>
+
+<ResponseField name="authenticationResponse" type="AuthenticationResponse">
+  <ResponseField name="user" type="User">
+    The authenticated user
+  </ResponseField>
+  <ResponseField name="accessToken" type="string">
+    JWT access token
+  </ResponseField>
+  <ResponseField name="refreshToken" type="string">
+    Refresh token for obtaining new access tokens
+  </ResponseField>
+  <ResponseField name="organizationId" type="string">
+    ID of the user's organization
+  </ResponseField>
+  <ResponseField name="authenticationMethod" type="string">
+    Method used for authentication (e.g., 'Password')
+  </ResponseField>
+  <ResponseField name="sealedSession" type="string">
+    Encrypted session data (if sealSession option was enabled)
+  </ResponseField>
+</ResponseField>
+
+```typescript
+const authResponse = await workos.userManagement.authenticateWithPassword({
+  email: 'user@example.com',
+  password: 'securePassword123',
+  clientId: 'client_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+});
+
+console.log(authResponse.accessToken);
+```
+
+### authenticateWithCode
+
+Exchanges an authorization code for tokens. Auto-detects public vs confidential client mode based on whether a code verifier or API key is provided.
+
+<ParamField body="code" type="string" required>
+  Authorization code from OAuth callback
+</ParamField>
+
+<ParamField body="clientId" type="string">
+  OAuth client ID (optional if configured globally)
+</ParamField>
+
+<ParamField body="codeVerifier" type="string">
+  PKCE code verifier (for public clients)
+</ParamField>
+
+<ParamField body="session" type="AuthenticateWithSessionOptions">
+  Session options for sealing the session
+</ParamField>
+
+<ResponseField name="authenticationResponse" type="AuthenticationResponse">
+  Authentication response with user and tokens
+</ResponseField>
+
+```typescript
+// Public client (PKCE flow)
+const authResponse = await workos.userManagement.authenticateWithCode({
+  code: 'auth_code_123',
+  codeVerifier: 'code_verifier_from_pkce',
+  clientId: 'client_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+});
+
+// Confidential client (uses API key)
+const authResponse = await workos.userManagement.authenticateWithCode({
+  code: 'auth_code_123',
+  clientId: 'client_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+});
+```
+
+### authenticateWithRefreshToken
+
+Refreshes an access token using a refresh token.
+
+<ParamField body="refreshToken" type="string" required>
+  The refresh token
+</ParamField>
+
+<ParamField body="clientId" type="string">
+  OAuth client ID (optional if configured globally)
+</ParamField>
+
+<ParamField body="session" type="AuthenticateWithSessionOptions">
+  Session options for sealing the session
+</ParamField>
+
+<ResponseField name="authenticationResponse" type="AuthenticationResponse">
+  New authentication response with refreshed tokens
+</ResponseField>
+
+```typescript
+const authResponse = await workos.userManagement.authenticateWithRefreshToken({
+  refreshToken: 'refresh_token_123',
+  clientId: 'client_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+});
+```
+
+### authenticateWithMagicAuth
+
+Authenticates a user with a magic auth code.
+
+<ParamField body="code" type="string" required>
+  Magic auth code from email
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  User's email address
+</ParamField>
+
+<ParamField body="clientId" type="string">
+  OAuth client ID (optional if configured globally)
+</ParamField>
+
+<ParamField body="session" type="AuthenticateWithSessionOptions">
+  Session options for sealing the session
+</ParamField>
+
+<ResponseField name="authenticationResponse" type="AuthenticationResponse">
+  Authentication response with user and tokens
+</ResponseField>
+
+```typescript
+const authResponse = await workos.userManagement.authenticateWithMagicAuth({
+  code: 'magic_code_123',
+  email: 'user@example.com',
+  clientId: 'client_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+});
+```
+
+### authenticateWithTotp
+
+Authenticates a user with a TOTP code.
+
+<ParamField body="code" type="string" required>
+  TOTP code from authenticator app
+</ParamField>
+
+<ParamField body="authenticationChallengeId" type="string" required>
+  ID of the authentication challenge
+</ParamField>
+
+<ParamField body="pendingAuthenticationToken" type="string" required>
+  Token from the initial authentication attempt
+</ParamField>
+
+<ParamField body="clientId" type="string">
+  OAuth client ID (optional if configured globally)
+</ParamField>
+
+<ParamField body="session" type="AuthenticateWithSessionOptions">
+  Session options for sealing the session
+</ParamField>
+
+<ResponseField name="authenticationResponse" type="AuthenticationResponse">
+  Authentication response with user and tokens
+</ResponseField>
+
+```typescript
+const authResponse = await workos.userManagement.authenticateWithTotp({
+  code: '123456',
+  authenticationChallengeId: 'auth_challenge_123',
+  pendingAuthenticationToken: 'pending_token_123',
+  clientId: 'client_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+});
+```
+
+### getAuthorizationUrl
+
+Generates an OAuth 2.0 authorization URL.
+
+<ParamField body="provider" type="string">
+  OAuth provider (e.g., 'authkit', 'GoogleOAuth')
+</ParamField>
+
+<ParamField body="connectionId" type="string">
+  SSO connection ID
+</ParamField>
+
+<ParamField body="organizationId" type="string">
+  Organization ID
+</ParamField>
+
+<ParamField body="redirectUri" type="string" required>
+  URL to redirect after authorization
+</ParamField>
+
+<ParamField body="state" type="string">
+  State parameter for CSRF protection
+</ParamField>
+
+<ParamField body="codeChallenge" type="string">
+  PKCE code challenge
+</ParamField>
+
+<ParamField body="codeChallengeMethod" type="string">
+  PKCE code challenge method (e.g., 'S256')
+</ParamField>
+
+<ParamField body="screenHint" type="string">
+  Screen hint for AuthKit (e.g., 'sign-up', 'sign-in')
+</ParamField>
+
+<ResponseField name="url" type="string">
+  The authorization URL
+</ResponseField>
+
+```typescript
+const url = workos.userManagement.getAuthorizationUrl({
+  provider: 'authkit',
+  redirectUri: 'https://myapp.com/callback',
+  state: 'random_state_123',
+  screenHint: 'sign-up'
+});
+
+// Redirect user to this URL
+window.location.href = url;
+```
+
+### getAuthorizationUrlWithPKCE
+
+Generates an OAuth 2.0 authorization URL with automatic PKCE generation.
+
+<ParamField body="provider" type="string">
+  OAuth provider (e.g., 'authkit')
+</ParamField>
+
+<ParamField body="connectionId" type="string">
+  SSO connection ID
+</ParamField>
+
+<ParamField body="organizationId" type="string">
+  Organization ID
+</ParamField>
+
+<ParamField body="redirectUri" type="string" required>
+  URL to redirect after authorization
+</ParamField>
+
+<ParamField body="screenHint" type="string">
+  Screen hint for AuthKit
+</ParamField>
+
+<ResponseField name="result" type="PKCEAuthorizationURLResult">
+  <ResponseField name="url" type="string">
+    The authorization URL
+  </ResponseField>
+  <ResponseField name="state" type="string">
+    Generated state parameter
+  </ResponseField>
+  <ResponseField name="codeVerifier" type="string">
+    Code verifier for PKCE (store securely)
+  </ResponseField>
+</ResponseField>
+
+```typescript
+const { url, state, codeVerifier } = await workos.userManagement.getAuthorizationUrlWithPKCE({
+  provider: 'authkit',
+  clientId: 'client_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5',
+  redirectUri: 'myapp://callback'
+});
+
+// Store state and codeVerifier securely
+localStorage.setItem('pkce_state', state);
+localStorage.setItem('pkce_verifier', codeVerifier);
+
+// Redirect user
+window.location.href = url;
+```
+
+## Session Methods
+
+### loadSealedSession
+
+Loads a sealed session for session management.
+
+<ParamField body="sessionData" type="string" required>
+  Encrypted session data from cookie
+</ParamField>
+
+<ParamField body="cookiePassword" type="string" required>
+  Password used to encrypt the session
+</ParamField>
+
+<ResponseField name="session" type="CookieSession">
+  Session object for managing the session
+</ResponseField>
+
+```typescript
+const session = workos.userManagement.loadSealedSession({
+  sessionData: req.cookies.session,
+  cookiePassword: process.env.WORKOS_COOKIE_PASSWORD
+});
+
+await session.refresh();
+```
+
+### authenticateWithSessionCookie
+
+Authenticates and validates a session cookie.
+
+<ParamField body="sessionData" type="string" required>
+  Encrypted session data from cookie
+</ParamField>
+
+<ParamField body="cookiePassword" type="string">
+  Password used to encrypt the session (defaults to WORKOS_COOKIE_PASSWORD env var)
+</ParamField>
+
+<ResponseField name="result" type="AuthenticateWithSessionCookieSuccessResponse | AuthenticateWithSessionCookieFailedResponse">
+  <ResponseField name="authenticated" type="boolean">
+    Whether authentication was successful
+  </ResponseField>
+  <ResponseField name="user" type="User">
+    The authenticated user (if successful)
+  </ResponseField>
+  <ResponseField name="sessionId" type="string">
+    Session ID (if successful)
+  </ResponseField>
+  <ResponseField name="organizationId" type="string">
+    Organization ID (if successful)
+  </ResponseField>
+  <ResponseField name="reason" type="string">
+    Failure reason (if failed)
+  </ResponseField>
+</ResponseField>
+
+```typescript
+const result = await workos.userManagement.authenticateWithSessionCookie({
+  sessionData: req.cookies.session,
+  cookiePassword: process.env.WORKOS_COOKIE_PASSWORD
+});
+
+if (result.authenticated) {
+  console.log('User:', result.user.email);
+} else {
+  console.log('Auth failed:', result.reason);
+}
+```
+
+### listSessions
+
+Lists all sessions for a user.
+
+<ParamField path="userId" type="string" required>
+  The user ID
+</ParamField>
+
+<ParamField body="limit" type="number">
+  Number of results to return
+</ParamField>
+
+<ParamField body="before" type="string">
+  Cursor for pagination
+</ParamField>
+
+<ParamField body="after" type="string">
+  Cursor for pagination
+</ParamField>
+
+<ResponseField name="sessions" type="AutoPaginatable<Session>">
+  Paginated list of sessions
+</ResponseField>
+
+```typescript
+const sessions = await workos.userManagement.listSessions('user_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5');
+
+for await (const session of sessions) {
+  console.log(session.id);
+}
+```
+
+### revokeSession
+
+Revokes a user session.
+
+<ParamField body="sessionId" type="string" required>
+  The session ID to revoke
+</ParamField>
+
+```typescript
+await workos.userManagement.revokeSession({
+  sessionId: 'session_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+});
+```
+
+### getLogoutUrl
+
+Generates a logout URL.
+
+<ParamField body="sessionId" type="string" required>
+  The session ID to log out
+</ParamField>
+
+<ParamField body="returnTo" type="string">
+  URL to redirect after logout
+</ParamField>
+
+<ResponseField name="url" type="string">
+  The logout URL
+</ResponseField>
+
+```typescript
+const logoutUrl = workos.userManagement.getLogoutUrl({
+  sessionId: 'session_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5',
+  returnTo: 'https://myapp.com'
+});
+```
+
+## Organization Membership Methods
+
+### getOrganizationMembership
+
+Retrieves an organization membership by ID.
+
+<ParamField path="organizationMembershipId" type="string" required>
+  The organization membership ID
+</ParamField>
+
+<ResponseField name="membership" type="OrganizationMembership">
+  <ResponseField name="id" type="string">
+    Membership ID
+  </ResponseField>
+  <ResponseField name="userId" type="string">
+    User ID
+  </ResponseField>
+  <ResponseField name="organizationId" type="string">
+    Organization ID
+  </ResponseField>
+  <ResponseField name="organizationName" type="string">
+    Organization name
+  </ResponseField>
+  <ResponseField name="status" type="'active' | 'inactive' | 'pending'">
+    Membership status
+  </ResponseField>
+  <ResponseField name="role" type="RoleResponse">
+    User's role in the organization
+  </ResponseField>
+  <ResponseField name="createdAt" type="string">
+    ISO 8601 timestamp
+  </ResponseField>
+  <ResponseField name="updatedAt" type="string">
+    ISO 8601 timestamp
+  </ResponseField>
+</ResponseField>
+
+```typescript
+const membership = await workos.userManagement.getOrganizationMembership(
+  'om_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+);
+```
+
+### listOrganizationMemberships
+
+Lists organization memberships with filtering.
+
+<ParamField body="userId" type="string">
+  Filter by user ID
+</ParamField>
+
+<ParamField body="organizationId" type="string">
+  Filter by organization ID
+</ParamField>
+
+<ParamField body="statuses" type="OrganizationMembershipStatus[]">
+  Filter by membership status
+</ParamField>
+
+<ParamField body="limit" type="number">
+  Number of results to return
+</ParamField>
+
+<ResponseField name="memberships" type="AutoPaginatable<OrganizationMembership>">
+  Paginated list of memberships
+</ResponseField>
+
+```typescript
+const memberships = await workos.userManagement.listOrganizationMemberships({
+  userId: 'user_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5',
+  statuses: ['active']
+});
+```
+
+### createOrganizationMembership
+
+Creates a new organization membership.
+
+<ParamField body="userId" type="string" required>
+  The user ID
+</ParamField>
+
+<ParamField body="organizationId" type="string" required>
+  The organization ID
+</ParamField>
+
+<ParamField body="roleSlug" type="string">
+  Role slug to assign
+</ParamField>
+
+<ResponseField name="membership" type="OrganizationMembership">
+  The created membership
+</ResponseField>
+
+```typescript
+const membership = await workos.userManagement.createOrganizationMembership({
+  userId: 'user_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5',
+  organizationId: 'org_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5',
+  roleSlug: 'member'
+});
+```
+
+### updateOrganizationMembership
+
+Updates an organization membership.
+
+<ParamField path="organizationMembershipId" type="string" required>
+  The membership ID to update
+</ParamField>
+
+<ParamField body="roleSlug" type="string">
+  New role slug
+</ParamField>
+
+<ResponseField name="membership" type="OrganizationMembership">
+  The updated membership
+</ResponseField>
+
+```typescript
+const membership = await workos.userManagement.updateOrganizationMembership(
+  'om_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5',
+  { roleSlug: 'admin' }
+);
+```
+
+### deleteOrganizationMembership
+
+Deletes an organization membership.
+
+<ParamField path="organizationMembershipId" type="string" required>
+  The membership ID to delete
+</ParamField>
+
+```typescript
+await workos.userManagement.deleteOrganizationMembership(
+  'om_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+);
+```
+
+### deactivateOrganizationMembership
+
+Deactivates an organization membership.
+
+<ParamField path="organizationMembershipId" type="string" required>
+  The membership ID to deactivate
+</ParamField>
+
+<ResponseField name="membership" type="OrganizationMembership">
+  The deactivated membership
+</ResponseField>
+
+```typescript
+const membership = await workos.userManagement.deactivateOrganizationMembership(
+  'om_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+);
+```
+
+### reactivateOrganizationMembership
+
+Reactivates an organization membership.
+
+<ParamField path="organizationMembershipId" type="string" required>
+  The membership ID to reactivate
+</ParamField>
+
+<ResponseField name="membership" type="OrganizationMembership">
+  The reactivated membership
+</ResponseField>
+
+```typescript
+const membership = await workos.userManagement.reactivateOrganizationMembership(
+  'om_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+);
+```
+
+## Email Verification Methods
+
+### sendVerificationEmail
+
+Sends a verification email to a user.
+
+<ParamField body="userId" type="string" required>
+  The user ID
+</ParamField>
+
+<ResponseField name="result" type="{ user: User }">
+  Object containing the user
+</ResponseField>
+
+```typescript
+const { user } = await workos.userManagement.sendVerificationEmail({
+  userId: 'user_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+});
+```
+
+### verifyEmail
+
+Verifies a user's email with a code.
+
+<ParamField body="userId" type="string" required>
+  The user ID
+</ParamField>
+
+<ParamField body="code" type="string" required>
+  Verification code from email
+</ParamField>
+
+<ResponseField name="result" type="{ user: User }">
+  Object containing the verified user
+</ResponseField>
+
+```typescript
+const { user } = await workos.userManagement.verifyEmail({
+  userId: 'user_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5',
+  code: 'verification_code_123'
+});
+```
+
+### getEmailVerification
+
+Retrieves email verification details.
+
+<ParamField path="emailVerificationId" type="string" required>
+  The email verification ID
+</ParamField>
+
+<ResponseField name="emailVerification" type="EmailVerification">
+  Email verification object
+</ResponseField>
+
+```typescript
+const verification = await workos.userManagement.getEmailVerification(
+  'email_verification_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+);
+```
+
+## Password Reset Methods
+
+### createPasswordReset
+
+Creates a password reset request.
+
+<ParamField body="email" type="string" required>
+  User's email address
+</ParamField>
+
+<ResponseField name="passwordReset" type="PasswordReset">
+  Password reset object
+</ResponseField>
+
+```typescript
+const passwordReset = await workos.userManagement.createPasswordReset({
+  email: 'user@example.com'
+});
+```
+
+### resetPassword
+
+Resets a user's password.
+
+<ParamField body="token" type="string" required>
+  Password reset token
+</ParamField>
+
+<ParamField body="newPassword" type="string" required>
+  New password
+</ParamField>
+
+<ResponseField name="result" type="{ user: User }">
+  Object containing the user with reset password
+</ResponseField>
+
+```typescript
+const { user } = await workos.userManagement.resetPassword({
+  token: 'reset_token_123',
+  newPassword: 'newSecurePassword456'
+});
+```
+
+### getPasswordReset
+
+Retrieves password reset details.
+
+<ParamField path="passwordResetId" type="string" required>
+  The password reset ID
+</ParamField>
+
+<ResponseField name="passwordReset" type="PasswordReset">
+  Password reset object
+</ResponseField>
+
+```typescript
+const passwordReset = await workos.userManagement.getPasswordReset(
+  'password_reset_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+);
+```
+
+## Magic Auth Methods
+
+### createMagicAuth
+
+Creates a magic authentication link.
+
+<ParamField body="email" type="string" required>
+  User's email address
+</ParamField>
+
+<ResponseField name="magicAuth" type="MagicAuth">
+  Magic auth object with authentication link
+</ResponseField>
+
+```typescript
+const magicAuth = await workos.userManagement.createMagicAuth({
+  email: 'user@example.com'
+});
+
+console.log(magicAuth.link);
+```
+
+### getMagicAuth
+
+Retrieves magic auth details.
+
+<ParamField path="magicAuthId" type="string" required>
+  The magic auth ID
+</ParamField>
+
+<ResponseField name="magicAuth" type="MagicAuth">
+  Magic auth object
+</ResponseField>
+
+```typescript
+const magicAuth = await workos.userManagement.getMagicAuth(
+  'magic_auth_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+);
+```
+
+## Auth Factor Methods
+
+### enrollAuthFactor
+
+Enrolls a new authentication factor (MFA).
+
+<ParamField body="userId" type="string" required>
+  The user ID
+</ParamField>
+
+<ParamField body="type" type="'totp' | 'sms'" required>
+  Type of authentication factor
+</ParamField>
+
+<ParamField body="phoneNumber" type="string">
+  Phone number (required for SMS type)
+</ParamField>
+
+<ParamField body="issuer" type="string">
+  TOTP issuer (required for TOTP type)
+</ParamField>
+
+<ParamField body="user" type="string">
+  TOTP user (required for TOTP type)
+</ParamField>
+
+<ResponseField name="result" type="object">
+  <ResponseField name="authenticationFactor" type="FactorWithSecrets">
+    The enrolled factor with secrets
+  </ResponseField>
+  <ResponseField name="authenticationChallenge" type="Challenge">
+    Initial authentication challenge
+  </ResponseField>
+</ResponseField>
+
+```typescript
+const { authenticationFactor, authenticationChallenge } = 
+  await workos.userManagement.enrollAuthFactor({
+    userId: 'user_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5',
+    type: 'totp',
+    issuer: 'MyApp',
+    user: 'user@example.com'
+  });
+
+console.log(authenticationFactor.totp?.qrCode);
+```
+
+### listAuthFactors
+
+Lists authentication factors for a user.
+
+<ParamField body="userId" type="string" required>
+  The user ID
+</ParamField>
+
+<ParamField body="limit" type="number">
+  Number of results to return
+</ParamField>
+
+<ResponseField name="factors" type="AutoPaginatable<Factor>">
+  Paginated list of authentication factors
+</ResponseField>
+
+```typescript
+const factors = await workos.userManagement.listAuthFactors({
+  userId: 'user_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+});
+
+for await (const factor of factors) {
+  console.log(factor.type);
+}
+```
+
+## Invitation Methods
+
+### sendInvitation
+
+Sends an organization invitation.
+
+<ParamField body="email" type="string" required>
+  Email address to invite
+</ParamField>
+
+<ParamField body="organizationId" type="string" required>
+  Organization ID
+</ParamField>
+
+<ResponseField name="invitation" type="Invitation">
+  The created invitation
+</ResponseField>
+
+```typescript
+const invitation = await workos.userManagement.sendInvitation({
+  email: 'newuser@example.com',
+  organizationId: 'org_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+});
+```
+
+### listInvitations
+
+Lists invitations.
+
+<ParamField body="organizationId" type="string">
+  Filter by organization ID
+</ParamField>
+
+<ParamField body="email" type="string">
+  Filter by email
+</ParamField>
+
+<ParamField body="limit" type="number">
+  Number of results to return
+</ParamField>
+
+<ResponseField name="invitations" type="AutoPaginatable<Invitation>">
+  Paginated list of invitations
+</ResponseField>
+
+```typescript
+const invitations = await workos.userManagement.listInvitations({
+  organizationId: 'org_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+});
+```
+
+### getInvitation
+
+Retrieves an invitation by ID.
+
+<ParamField path="invitationId" type="string" required>
+  The invitation ID
+</ParamField>
+
+<ResponseField name="invitation" type="Invitation">
+  The invitation object
+</ResponseField>
+
+```typescript
+const invitation = await workos.userManagement.getInvitation(
+  'invitation_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+);
+```
+
+### revokeInvitation
+
+Revokes an invitation.
+
+<ParamField path="invitationId" type="string" required>
+  The invitation ID to revoke
+</ParamField>
+
+<ResponseField name="invitation" type="Invitation">
+  The revoked invitation
+</ResponseField>
+
+```typescript
+const invitation = await workos.userManagement.revokeInvitation(
+  'invitation_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+);
+```
+
+### resendInvitation
+
+Resends an invitation.
+
+<ParamField path="invitationId" type="string" required>
+  The invitation ID to resend
+</ParamField>
+
+<ResponseField name="invitation" type="Invitation">
+  The resent invitation
+</ResponseField>
+
+```typescript
+const invitation = await workos.userManagement.resendInvitation(
+  'invitation_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+);
+```
+
+## Utility Methods
+
+### getJwksUrl
+
+Returns the JWKS URL for token verification.
+
+<ParamField path="clientId" type="string" required>
+  The client ID
+</ParamField>
+
+<ResponseField name="url" type="string">
+  The JWKS URL
+</ResponseField>
+
+```typescript
+const jwksUrl = workos.userManagement.getJwksUrl('client_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5');
+console.log(jwksUrl);
+```

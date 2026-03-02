@@ -1,0 +1,346 @@
+---
+title: "Node.js Runtime"
+description: "Using the WorkOS SDK in Node.js applications"
+---
+
+The WorkOS Node.js SDK is optimized for Node.js server-side applications with full support for both ESM and CommonJS.
+
+## Requirements
+
+<Info>
+  Node.js version **20.15.0** or higher is required.
+</Info>
+
+```json package.json
+{
+  "engines": {
+    "node": ">=20.15.0"
+  }
+}
+```
+
+## Installation
+
+Install the SDK using your preferred package manager:
+
+<CodeGroup>
+```bash npm
+npm install @workos-inc/node
+```
+
+```bash yarn
+yarn add @workos-inc/node
+```
+
+```bash pnpm
+pnpm add @workos-inc/node
+```
+</CodeGroup>
+
+## Module Format
+
+The SDK supports both ES Modules and CommonJS, automatically selecting the correct format based on your project configuration.
+
+### ES Modules (Recommended)
+
+For projects using ES Modules (with `"type": "module"` in package.json):
+
+```typescript index.ts
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+
+// List users
+const { data: users } = await workos.userManagement.listUsers();
+console.log(users);
+```
+
+### CommonJS
+
+For projects using CommonJS (default Node.js module system):
+
+```javascript index.js
+const { WorkOS } = require('@workos-inc/node');
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+
+// List users
+workos.userManagement.listUsers().then(({ data: users }) => {
+  console.log(users);
+});
+```
+
+<Note>
+  The CommonJS build bundles ESM-only dependencies like `iron-webcrypto` for seamless compatibility.
+</Note>
+
+## Configuration
+
+Initialize the SDK with your API key:
+
+<CodeGroup>
+```typescript Environment Variable
+import { WorkOS } from '@workos-inc/node';
+
+// API key from WORKOS_API_KEY environment variable
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+```
+
+```typescript Direct Configuration
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_test_1234567890');
+```
+
+```typescript Advanced Options
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS({
+  apiKey: process.env.WORKOS_API_KEY,
+  clientId: 'client_123',
+  timeout: 10000, // 10 seconds
+  config: {
+    headers: {
+      'X-Custom-Header': 'value',
+    },
+  },
+});
+```
+</CodeGroup>
+
+## TypeScript Support
+
+The SDK is written in TypeScript and includes full type definitions:
+
+```typescript app.ts
+import { WorkOS, User, Organization } from '@workos-inc/node';
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+
+// Type-safe API calls
+const { data: users }: { data: User[] } = 
+  await workos.userManagement.listUsers();
+
+const { data: orgs }: { data: Organization[] } = 
+  await workos.organizations.listOrganizations();
+
+// TypeScript autocomplete for all methods and properties
+const user = await workos.userManagement.getUser({
+  userId: 'user_123',
+});
+
+console.log(user.email); // ✓ Type-safe
+```
+
+## Node.js-Specific Features
+
+The Node.js build includes several Node.js-specific features:
+
+### User-Agent Header
+
+The SDK automatically sets a `User-Agent` header with version information:
+
+```typescript:src/index.ts
+createHttpClient(options: WorkOSOptions, userAgent: string): HttpClient {
+  const headers: Record<string, string> = {};
+  
+  headers['User-Agent'] = userAgent;
+  
+  if (this.key) {
+    headers['Authorization'] = `Bearer ${this.key}`;
+  }
+  
+  return new FetchHttpClient(this.baseURL, { headers }, options.fetchFn);
+}
+```
+
+### Deprecation Warnings
+
+The SDK uses `process.emitWarning()` to emit deprecation warnings:
+
+```typescript:src/index.ts
+emitWarning(warning: string): void {
+  return process.emitWarning(warning, 'WorkOS');
+}
+```
+
+These warnings appear in your console but won't crash your application.
+
+### Custom Fetch Implementation
+
+You can provide a custom `fetch` implementation:
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+import nodeFetch from 'node-fetch';
+
+const workos = new WorkOS({
+  apiKey: process.env.WORKOS_API_KEY,
+  fetchFn: nodeFetch as typeof fetch,
+});
+```
+
+## Framework Examples
+
+### Express.js
+
+```typescript app.ts
+import express from 'express';
+import { WorkOS } from '@workos-inc/node';
+
+const app = express();
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+
+app.get('/users', async (req, res) => {
+  try {
+    const { data: users } = await workos.userManagement.listUsers();
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.listen(3000);
+```
+
+### Next.js App Router
+
+```typescript app/api/users/route.ts
+import { WorkOS } from '@workos-inc/node';
+import { NextResponse } from 'next/server';
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+
+export async function GET() {
+  try {
+    const { data: users } = await workos.userManagement.listUsers();
+    return NextResponse.json(users);
+  } catch (error) {
+    return NextResponse.json(
+      { error: error.message },
+      { status: 500 }
+    );
+  }
+}
+```
+
+### NestJS
+
+```typescript workos.service.ts
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { WorkOS } from '@workos-inc/node';
+
+@Injectable()
+export class WorkOSService {
+  private workos: WorkOS;
+
+  constructor(private configService: ConfigService) {
+    this.workos = new WorkOS(
+      this.configService.get('WORKOS_API_KEY'),
+    );
+  }
+
+  async getUsers() {
+    const { data: users } = await this.workos.userManagement.listUsers();
+    return users;
+  }
+}
+```
+
+## Testing
+
+Mock the WorkOS client in your tests:
+
+```typescript workos.test.ts
+import { WorkOS } from '@workos-inc/node';
+import { jest } from '@jest/globals';
+
+jest.mock('@workos-inc/node');
+
+const mockWorkOS = WorkOS as jest.MockedClass<typeof WorkOS>;
+
+test('lists users', async () => {
+  const mockListUsers = jest.fn().mockResolvedValue({
+    data: [{ id: 'user_123', email: 'user@example.com' }],
+  });
+
+  mockWorkOS.prototype.userManagement = {
+    listUsers: mockListUsers,
+  } as any;
+
+  const workos = new WorkOS('sk_test');
+  const { data: users } = await workos.userManagement.listUsers();
+
+  expect(users).toHaveLength(1);
+  expect(mockListUsers).toHaveBeenCalled();
+});
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="ERR_REQUIRE_ESM error" icon="circle-exclamation">
+    If you see this error, you're trying to use `require()` with an ESM-only package. Solutions:
+    
+    1. Use ES Modules:
+    ```json package.json
+    {
+      "type": "module"
+    }
+    ```
+    
+    2. Or use dynamic import:
+    ```javascript
+    const { WorkOS } = await import('@workos-inc/node');
+    ```
+  </Accordion>
+  
+  <Accordion title="Module not found errors" icon="circle-exclamation">
+    Ensure you're using Node.js 20.15.0 or higher:
+    
+    ```bash
+    node --version
+    ```
+    
+    Update Node.js if needed:
+    ```bash
+    nvm install 20
+    nvm use 20
+    ```
+  </Accordion>
+  
+  <Accordion title="TypeScript errors" icon="circle-exclamation">
+    Ensure your `tsconfig.json` has proper module resolution:
+    
+    ```json tsconfig.json
+    {
+      "compilerOptions": {
+        "module": "ESNext",
+        "moduleResolution": "bundler",
+        "target": "ES2022"
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="User Management" icon="users" href="/api/user-management">
+    Manage users and authentication
+  </Card>
+  
+  <Card title="SSO" icon="key" href="/api/sso">
+    Single Sign-On integration
+  </Card>
+  
+  <Card title="Webhooks" icon="webhook" href="/api/webhooks">
+    Handle WorkOS webhook events
+  </Card>
+  
+  <Card title="Organizations" icon="building" href="/api/organizations">
+    Manage organizations
+  </Card>
+</CardGroup>

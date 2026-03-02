@@ -1,0 +1,183 @@
+---
+title: Organization Domains API
+description: Manage organization domains and verify ownership
+---
+
+The Organization Domains API allows you to create, retrieve, verify, and delete domains associated with organizations.
+
+## Initialize
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_example_123456789');
+```
+
+## Methods
+
+### get
+
+Retrieve an organization domain by ID.
+
+```typescript
+const domain = await workos.organizationDomains.get('org_domain_123');
+
+console.log(domain.domain, domain.state);
+```
+
+<ParamField path="id" type="string" required>
+  The unique identifier of the organization domain.
+</ParamField>
+
+<ResponseField name="organizationDomain" type="OrganizationDomain">
+  The organization domain object.
+
+  <Expandable title="properties">
+    <ResponseField name="object" type="'organization_domain'">
+      Object type identifier.
+    </ResponseField>
+    <ResponseField name="id" type="string">
+      Unique identifier for the organization domain.
+    </ResponseField>
+    <ResponseField name="domain" type="string">
+      The domain name (e.g., "example.com").
+    </ResponseField>
+    <ResponseField name="organizationId" type="string">
+      ID of the organization this domain belongs to.
+    </ResponseField>
+    <ResponseField name="state" type="OrganizationDomainState">
+      Verification state: `verified`, `pending`, or `failed`.
+    </ResponseField>
+    <ResponseField name="verificationToken" type="string" optional>
+      Token used for DNS verification (if using DNS strategy).
+    </ResponseField>
+    <ResponseField name="verificationStrategy" type="OrganizationDomainVerificationStrategy">
+      Verification strategy: `dns` or `manual`.
+    </ResponseField>
+    <ResponseField name="createdAt" type="string">
+      ISO-8601 timestamp of creation.
+    </ResponseField>
+    <ResponseField name="updatedAt" type="string">
+      ISO-8601 timestamp of last update.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+### create
+
+Create a new organization domain.
+
+```typescript
+const domain = await workos.organizationDomains.create({
+  organizationId: 'org_123',
+  domain: 'acme.com',
+});
+
+console.log(domain.verificationToken);
+```
+
+<ParamField path="payload" type="CreateOrganizationDomainOptions" required>
+  The organization domain data.
+
+  <Expandable title="properties">
+    <ParamField path="organizationId" type="string" required>
+      The ID of the organization.
+    </ParamField>
+    <ParamField path="domain" type="string" required>
+      The domain name to add (e.g., "example.com").
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="organizationDomain" type="OrganizationDomain">
+  The created organization domain object.
+</ResponseField>
+
+---
+
+### verify
+
+Verify an organization domain.
+
+```typescript
+const domain = await workos.organizationDomains.verify('org_domain_123');
+
+console.log(domain.state); // 'verified' if successful
+```
+
+<ParamField path="id" type="string" required>
+  The unique identifier of the organization domain to verify.
+</ParamField>
+
+<ResponseField name="organizationDomain" type="OrganizationDomain">
+  The verified organization domain object with updated state.
+</ResponseField>
+
+---
+
+### delete
+
+Delete an organization domain.
+
+```typescript
+await workos.organizationDomains.delete('org_domain_123');
+```
+
+<ParamField path="id" type="string" required>
+  The unique identifier of the organization domain to delete.
+</ParamField>
+
+## Domain Verification
+
+### DNS Verification
+
+When creating a domain with the DNS verification strategy, you'll receive a `verificationToken`. Add this as a TXT record:
+
+```
+TXT _workos.example.com "verification_token_here"
+```
+
+Then call the `verify` method to complete verification.
+
+### Manual Verification
+
+For manual verification, WorkOS will verify domain ownership through alternative means. Contact support for manual verification options.
+
+## Example: Complete Domain Setup
+
+```typescript
+// 1. Create the domain
+const domain = await workos.organizationDomains.create({
+  organizationId: 'org_123',
+  domain: 'acme.com',
+});
+
+console.log('Add this TXT record:', domain.verificationToken);
+
+// 2. After DNS propagation, verify the domain
+const verifiedDomain = await workos.organizationDomains.verify(domain.id);
+
+if (verifiedDomain.state === 'verified') {
+  console.log('Domain verified successfully!');
+} else {
+  console.log('Verification failed or still pending');
+}
+```
+
+## Domain States
+
+<ParamField path="OrganizationDomainState" type="enum">
+  <Expandable title="values">
+    <ParamField path="verified" type="string">
+      Domain ownership has been verified.
+    </ParamField>
+    <ParamField path="pending" type="string">
+      Domain is awaiting verification.
+    </ParamField>
+    <ParamField path="failed" type="string">
+      Domain verification failed.
+    </ParamField>
+  </Expandable>
+</ParamField>

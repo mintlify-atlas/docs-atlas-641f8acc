@@ -1,0 +1,225 @@
+---
+title: Authentication
+description: Authentication concepts and patterns in the WorkOS Node.js SDK
+---
+
+The WorkOS Node.js SDK provides comprehensive authentication capabilities for both server-side and client-side applications. This guide covers the core authentication concepts and patterns.
+
+## Authentication modes
+
+The SDK supports two distinct authentication modes based on your application architecture:
+
+### Server-side authentication (confidential clients)
+
+Server-side applications that can securely store secrets use an API key for authentication:
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+// Initialize with API key (string)
+const workos = new WorkOS('sk_...');
+
+// Or with options object
+const workos = new WorkOS({ 
+  apiKey: 'sk_...', 
+  clientId: 'client_...' 
+});
+```
+
+API keys can also be provided via the `WORKOS_API_KEY` environment variable:
+
+```bash
+WORKOS_API_KEY="sk_1234"
+```
+
+### Public client authentication (PKCE)
+
+For applications that cannot securely store secrets (browser apps, mobile apps, Electron apps, CLI tools), initialize with just a client ID:
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+// Public client mode (no API key needed)
+const workos = new WorkOS({ clientId: 'client_...' });
+
+// Generate auth URL with automatic PKCE
+const { url, codeVerifier } =
+  await workos.userManagement.getAuthorizationUrlWithPKCE({
+    provider: 'authkit',
+    redirectUri: 'myapp://callback',
+    clientId: 'client_...',
+  });
+
+// After user authenticates, exchange code for tokens
+const { accessToken, refreshToken } =
+  await workos.userManagement.authenticateWithCode({
+    code: authorizationCode,
+    codeVerifier,
+    clientId: 'client_...',
+  });
+```
+
+<Warning>
+Store `codeVerifier` securely on-device between generating the auth URL and handling the callback. For mobile apps, use platform secure storage (iOS Keychain, Android Keystore). For CLI apps, consider OS credential storage. The verifier must survive app restarts during the auth flow.
+</Warning>
+
+## Authentication methods
+
+The SDK provides several authentication methods for different use cases:
+
+### OAuth code exchange
+
+Exchange an authorization code for access and refresh tokens:
+
+```typescript
+// With PKCE (public clients)
+const response = await workos.userManagement.authenticateWithCode({
+  code: authorizationCode,
+  codeVerifier: 'stored-verifier',
+  clientId: 'client_...',
+});
+
+// With client secret (confidential clients)
+const response = await workos.userManagement.authenticateWithCode({
+  code: authorizationCode,
+  clientId: 'client_...',
+});
+
+// With both (defense in depth - recommended by OAuth 2.1)
+const response = await workos.userManagement.authenticateWithCode({
+  code: authorizationCode,
+  codeVerifier: 'stored-verifier',
+  clientId: 'client_...',
+});
+```
+
+See the [workos.ts:331](/home/daytona/workspace/source/src/workos.ts:331) implementation for details.
+
+### Password authentication
+
+Authenticate users with email and password:
+
+```typescript
+const response = await workos.userManagement.authenticateWithPassword({
+  email: 'user@example.com',
+  password: 'secure-password',
+  clientId: 'client_...',
+});
+```
+
+### Magic link authentication
+
+Authenticate users via magic link codes:
+
+```typescript
+const response = await workos.userManagement.authenticateWithMagicAuth({
+  code: 'magic-auth-code',
+  email: 'user@example.com',
+  clientId: 'client_...',
+});
+```
+
+### Refresh token authentication
+
+Exchange a refresh token for a new access token:
+
+```typescript
+// Public clients (no API key required)
+const response = await workos.userManagement.authenticateWithRefreshToken({
+  refreshToken: 'stored-refresh-token',
+  clientId: 'client_...',
+});
+
+// Confidential clients (with API key)
+const response = await workos.userManagement.authenticateWithRefreshToken({
+  refreshToken: 'stored-refresh-token',
+  clientId: 'client_...',
+});
+```
+
+### TOTP authentication
+
+Authenticate users with time-based one-time passwords (multi-factor authentication):
+
+```typescript
+const response = await workos.userManagement.authenticateWithTotp({
+  code: '123456',
+  authenticationChallengeId: 'auth_challenge_...',
+  pendingAuthenticationToken: 'pending-token',
+  clientId: 'client_...',
+});
+```
+
+## Authentication response
+
+All authentication methods return an `AuthenticationResponse` object:
+
+```typescript
+interface AuthenticationResponse {
+  accessToken: string;
+  refreshToken?: string;
+  user: User;
+  organizationId?: string;
+  impersonator?: Impersonator;
+}
+```
+
+<Info>
+The `refreshToken` is only returned on initial authentication. Subsequent refresh operations return a new access token but may not include a new refresh token unless rotation is enabled.
+</Info>
+
+## Client ID resolution
+
+The SDK automatically resolves the client ID from multiple sources:
+
+1. Explicitly passed in method options
+2. Provided during WorkOS initialization
+3. `WORKOS_CLIENT_ID` environment variable
+
+From [workos.ts:127](/home/daytona/workspace/source/src/workos.ts:127):
+
+```typescript
+this.clientId = this.options.clientId;
+if (!this.clientId) {
+  this.clientId = getEnv('WORKOS_CLIENT_ID');
+}
+```
+
+## Authorization headers
+
+The SDK automatically manages authorization headers:
+
+- **API key authentication**: Adds `Authorization: Bearer sk_...` to all requests
+- **Access token authentication**: Can be passed explicitly for user-scoped operations
+
+From [workos.ts:203](/home/daytona/workspace/source/src/workos.ts:203):
+
+```typescript
+if (this.key) {
+  headers['Authorization'] = `Bearer ${this.key}`;
+}
+```
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Use environment variables" icon="key">
+    Store API keys and client IDs in environment variables rather than hardcoding them in your application.
+  </Card>
+  <Card title="Use PKCE for public clients" icon="shield-halved">
+    Always use PKCE flow for applications that cannot securely store client secrets.
+  </Card>
+  <Card title="Implement token refresh" icon="arrows-rotate">
+    Implement automatic token refresh using refresh tokens to maintain user sessions.
+  </Card>
+  <Card title="Defense in depth" icon="layer-group">
+    Consider using PKCE even with confidential clients for additional security (OAuth 2.1 recommendation).
+  </Card>
+</CardGroup>
+
+## Related resources
+
+- [Client initialization](/concepts/client-initialization)
+- [PKCE flow](/concepts/pkce-flow)
+- [Error handling](/concepts/error-handling)
+- [AuthKit documentation](https://workos.com/docs/authkit)

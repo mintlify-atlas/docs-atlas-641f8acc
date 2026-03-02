@@ -1,0 +1,234 @@
+---
+title: 'Feature Flags'
+description: 'Manage feature flags and feature targeting in your application'
+---
+
+## Overview
+
+The Feature Flags API enables you to control feature rollouts, manage feature targeting, and toggle features on or off for your users and organizations.
+
+## Methods
+
+### listFeatureFlags
+
+Retrieves a paginated list of all feature flags.
+
+<ParamField path="options" type="ListFeatureFlagsOptions">
+  Optional pagination and filtering parameters
+  
+  <Expandable title="properties">
+    <ParamField path="limit" type="number">
+      Maximum number of feature flags to return per page
+    </ParamField>
+    
+    <ParamField path="after" type="string">
+      Cursor for pagination to fetch the next page of results
+    </ParamField>
+    
+    <ParamField path="before" type="string">
+      Cursor for pagination to fetch the previous page of results
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="AutoPaginatable<FeatureFlag>" type="object">
+  An auto-paginatable collection of feature flags
+</ResponseField>
+
+#### Example
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_example_123456789');
+
+const featureFlags = await workos.featureFlags.listFeatureFlags({
+  limit: 10,
+});
+
+for await (const flag of featureFlags) {
+  console.log(flag.name, flag.enabled);
+}
+```
+
+---
+
+### getFeatureFlag
+
+Retrieves a specific feature flag by its slug.
+
+<ParamField path="slug" type="string" required>
+  The unique slug identifier for the feature flag
+</ParamField>
+
+<ResponseField name="FeatureFlag" type="object">
+  The feature flag object
+  
+  <Expandable title="properties">
+    <ResponseField name="id" type="string">
+      Unique identifier for the feature flag
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      Display name of the feature flag
+    </ResponseField>
+    
+    <ResponseField name="slug" type="string">
+      URL-friendly identifier for the feature flag
+    </ResponseField>
+    
+    <ResponseField name="description" type="string">
+      Description of what the feature flag controls
+    </ResponseField>
+    
+    <ResponseField name="enabled" type="boolean">
+      Whether the feature flag is currently enabled
+    </ResponseField>
+    
+    <ResponseField name="defaultValue" type="boolean">
+      Default value for users not specifically targeted
+    </ResponseField>
+    
+    <ResponseField name="tags" type="string[]">
+      Tags associated with the feature flag
+    </ResponseField>
+    
+    <ResponseField name="createdAt" type="string">
+      ISO 8601 timestamp of when the flag was created
+    </ResponseField>
+    
+    <ResponseField name="updatedAt" type="string">
+      ISO 8601 timestamp of when the flag was last updated
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+#### Example
+
+```typescript
+const flag = await workos.featureFlags.getFeatureFlag('new-dashboard');
+
+console.log(flag.enabled); // true or false
+```
+
+---
+
+### enableFeatureFlag
+
+Enables a feature flag globally.
+
+<ParamField path="slug" type="string" required>
+  The unique slug identifier for the feature flag
+</ParamField>
+
+<ResponseField name="FeatureFlag" type="object">
+  The updated feature flag object with `enabled` set to `true`
+</ResponseField>
+
+#### Example
+
+```typescript
+const flag = await workos.featureFlags.enableFeatureFlag('new-dashboard');
+
+console.log(flag.enabled); // true
+```
+
+---
+
+### disableFeatureFlag
+
+Disables a feature flag globally.
+
+<ParamField path="slug" type="string" required>
+  The unique slug identifier for the feature flag
+</ParamField>
+
+<ResponseField name="FeatureFlag" type="object">
+  The updated feature flag object with `enabled` set to `false`
+</ResponseField>
+
+#### Example
+
+```typescript
+const flag = await workos.featureFlags.disableFeatureFlag('new-dashboard');
+
+console.log(flag.enabled); // false
+```
+
+---
+
+### addFlagTarget
+
+Adds a specific target (user or organization) to a feature flag, enabling the feature for that target.
+
+<ParamField path="options" type="AddFlagTargetOptions" required>
+  Options for adding a flag target
+  
+  <Expandable title="properties">
+    <ParamField path="slug" type="string" required>
+      The unique slug identifier for the feature flag
+    </ParamField>
+    
+    <ParamField path="targetId" type="string" required>
+      The ID of the user or organization to target
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+#### Example
+
+```typescript
+await workos.featureFlags.addFlagTarget({
+  slug: 'new-dashboard',
+  targetId: 'user_01H8Z9Q2Z3Y4X5W6V7U8T9S0R1',
+});
+```
+
+---
+
+### removeFlagTarget
+
+Removes a specific target from a feature flag.
+
+<ParamField path="options" type="RemoveFlagTargetOptions" required>
+  Options for removing a flag target
+  
+  <Expandable title="properties">
+    <ParamField path="slug" type="string" required>
+      The unique slug identifier for the feature flag
+    </ParamField>
+    
+    <ParamField path="targetId" type="string" required>
+      The ID of the user or organization to remove from targeting
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+#### Example
+
+```typescript
+await workos.featureFlags.removeFlagTarget({
+  slug: 'new-dashboard',
+  targetId: 'user_01H8Z9Q2Z3Y4X5W6V7U8T9S0R1',
+});
+```
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Gradual Rollouts" icon="gauge">
+    Roll out new features gradually to a subset of users before a full release
+  </Card>
+  
+  <Card title="A/B Testing" icon="flask">
+    Test different features or variations with specific user segments
+  </Card>
+  
+  <Card title="Kill Switches" icon="power-off">
+    Quickly disable problematic features without deploying new code
+  </Card>
+  
+  <Card title="Beta Programs" icon="star">
+    Grant early access to features for beta testers and early adopters
+  </Card>
+</CardGroup>

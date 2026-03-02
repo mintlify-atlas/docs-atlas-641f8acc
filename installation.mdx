@@ -1,0 +1,134 @@
+---
+title: Installation
+description: Install the WorkOS Node.js SDK using npm, yarn, pnpm, or bun
+---
+
+Install the WorkOS Node.js SDK to start integrating enterprise authentication and user management features into your application.
+
+## Requirements
+
+<Note>
+  **Node.js 20.15.0 or higher** is required to use this SDK.
+</Note>
+
+The SDK works across multiple JavaScript runtimes:
+
+- Node.js (20.15.0+)
+- Bun
+- Deno
+- Cloudflare Workers
+- Vercel Edge Functions
+- Other edge runtimes
+
+## Install the package
+
+Choose your preferred package manager:
+
+<CodeGroup>
+
+```bash npm
+npm install @workos-inc/node
+```
+
+```bash yarn
+yarn add @workos-inc/node
+```
+
+```bash pnpm
+pnpm add @workos-inc/node
+```
+
+```bash bun
+bun add @workos-inc/node
+```
+
+</CodeGroup>
+
+## Verify installation
+
+After installation, verify the SDK is working by importing it:
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+console.log('WorkOS SDK installed successfully!');
+```
+
+## Runtime-specific imports
+
+The SDK automatically detects your runtime and uses the appropriate build. However, you can also use runtime-specific imports if needed:
+
+<Tabs>
+  <Tab title="Node.js">
+    ```typescript
+    // CommonJS
+    const { WorkOS } = require('@workos-inc/node');
+
+    // ES Modules
+    import { WorkOS } from '@workos-inc/node';
+    ```
+  </Tab>
+  
+  <Tab title="Edge Runtime">
+    ```typescript
+    // Cloudflare Workers, Vercel Edge
+    import { WorkOS } from '@workos-inc/node/worker';
+    ```
+  </Tab>
+  
+  <Tab title="Deno">
+    ```typescript
+    import { WorkOS } from 'npm:@workos-inc/node';
+    ```
+  </Tab>
+  
+  <Tab title="Bun">
+    ```typescript
+    import { WorkOS } from '@workos-inc/node';
+    ```
+  </Tab>
+</Tabs>
+
+## Beta releases
+
+WorkOS occasionally releases beta versions with new features. To install a beta version:
+
+<CodeGroup>
+
+```bash npm
+npm install @workos-inc/node@beta
+```
+
+```bash yarn
+yarn add @workos-inc/node@beta
+```
+
+```bash pnpm
+pnpm add @workos-inc/node@beta
+```
+
+```bash bun
+bun add @workos-inc/node@beta
+```
+
+</CodeGroup>
+
+<Warning>
+  Beta versions may contain breaking changes between releases. We recommend pinning to a specific version:
+  
+  ```bash
+  npm install @workos-inc/node@8.7.0-beta.1
+  ```
+</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Configuration" icon="gear" href="/configuration">
+    Configure the WorkOS client with your API key
+  </Card>
+  
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Build your first integration with WorkOS
+  </Card>
+</CardGroup>

@@ -1,0 +1,343 @@
+---
+title: Webhooks API
+description: Securely receive and verify real-time event notifications
+---
+
+The Webhooks API provides methods for verifying webhook signatures and constructing validated event objects from webhook payloads.
+
+## Construct Event
+
+Verifies the webhook signature and constructs a validated event object.
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+
+// In your webhook endpoint
+app.post('/webhooks', async (req, res) => {
+  const sigHeader = req.headers['workos-signature'];
+  const payload = req.body;
+  
+  try {
+    const event = await workos.webhooks.constructEvent({
+      payload,
+      sigHeader,
+      secret: process.env.WORKOS_WEBHOOK_SECRET,
+      tolerance: 180000 // 3 minutes in milliseconds
+    });
+    
+    // Process the verified event
+    switch (event.event) {
+      case 'user.created':
+        console.log('New user:', event.data);
+        break;
+      case 'connection.activated':
+        console.log('Connection activated:', event.data);
+        break;
+      // Handle other event types...
+    }
+    
+    res.status(200).send('Webhook processed');
+  } catch (error) {
+    console.error('Webhook verification failed:', error);
+    res.status(400).send('Invalid signature');
+  }
+});
+```
+
+### Parameters
+
+<ParamField path="payload" type="Record<string, unknown>" required>
+  The raw webhook payload received from WorkOS.
+</ParamField>
+
+<ParamField path="sigHeader" type="string" required>
+  The value of the `workos-signature` header from the webhook request.
+</ParamField>
+
+<ParamField path="secret" type="string" required>
+  Your webhook secret key from the WorkOS dashboard.
+</ParamField>
+
+<ParamField path="tolerance" type="number" default="180000">
+  Time tolerance in milliseconds for validating the timestamp. Defaults to 180000 (3 minutes). Events with timestamps outside this tolerance window will be rejected to prevent replay attacks.
+</ParamField>
+
+### Response
+
+Returns a Promise that resolves to an `Event` object with the following properties:
+
+<ResponseField name="id" type="string">
+  Unique identifier for the event.
+</ResponseField>
+
+<ResponseField name="event" type="string">
+  The event type (e.g., `user.created`, `connection.activated`, `dsync.user.created`).
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  The event payload containing the relevant resource data. The structure varies based on the event type.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 timestamp when the event was created.
+</ResponseField>
+
+<ResponseField name="context" type="Record<string, unknown>">
+  Additional context about the event.
+</ResponseField>
+
+### Error Handling
+
+The method throws a `SignatureVerificationException` if:
+- The signature header is missing or malformed
+- The timestamp is outside the tolerance window
+- The computed signature doesn't match the provided signature
+
+---
+
+## Verify Header
+
+Verifies a webhook signature without constructing the event object.
+
+```typescript
+const isValid = await workos.webhooks.verifyHeader({
+  payload: req.body,
+  sigHeader: req.headers['workos-signature'],
+  secret: process.env.WORKOS_WEBHOOK_SECRET,
+  tolerance: 180000
+});
+
+if (isValid) {
+  // Process webhook
+} else {
+  // Reject webhook
+}
+```
+
+### Parameters
+
+<ParamField path="payload" type="any" required>
+  The raw webhook payload.
+</ParamField>
+
+<ParamField path="sigHeader" type="string" required>
+  The `workos-signature` header value.
+</ParamField>
+
+<ParamField path="secret" type="string" required>
+  Your webhook secret key.
+</ParamField>
+
+<ParamField path="tolerance" type="number" default="180000">
+  Time tolerance in milliseconds.
+</ParamField>
+
+### Response
+
+Returns a Promise that resolves to `true` if the signature is valid.
+
+---
+
+## Compute Signature
+
+Computes the expected signature for a webhook payload. Useful for testing and debugging.
+
+```typescript
+const expectedSignature = await workos.webhooks.computeSignature(
+  timestamp,
+  payload,
+  secret
+);
+```
+
+### Parameters
+
+<ParamField path="timestamp" type="any" required>
+  The timestamp from the webhook signature header.
+</ParamField>
+
+<ParamField path="payload" type="any" required>
+  The webhook payload object.
+</ParamField>
+
+<ParamField path="secret" type="string" required>
+  Your webhook secret key.
+</ParamField>
+
+### Response
+
+Returns a Promise that resolves to the computed HMAC signature string.
+
+---
+
+## Get Timestamp and Signature Hash
+
+Parses the signature header to extract the timestamp and signature hash.
+
+```typescript
+const [timestamp, signatureHash] = workos.webhooks.getTimestampAndSignatureHash(
+  't=1234567890,v1=abcdef123456'
+);
+
+console.log('Timestamp:', timestamp);
+console.log('Signature:', signatureHash);
+```
+
+### Parameters
+
+<ParamField path="sigHeader" type="string" required>
+  The `workos-signature` header value in format `t=<timestamp>,v1=<signature>`.
+</ParamField>
+
+### Response
+
+Returns a tuple `[timestamp: string, signatureHash: string]`.
+
+---
+
+## Webhook Verification Examples
+
+### Express.js
+
+```typescript
+import express from 'express';
+import { WorkOS } from '@workos-inc/node';
+
+const app = express();
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+
+// Use raw body parser for webhook routes
+app.post('/webhooks', 
+  express.raw({ type: 'application/json' }),
+  async (req, res) => {
+    const signature = req.headers['workos-signature'] as string;
+    
+    try {
+      const event = await workos.webhooks.constructEvent({
+        payload: JSON.parse(req.body.toString()),
+        sigHeader: signature,
+        secret: process.env.WORKOS_WEBHOOK_SECRET!,
+      });
+      
+      // Handle event
+      console.log('Received event:', event.event);
+      
+      res.json({ received: true });
+    } catch (err) {
+      console.error('Webhook error:', err);
+      res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+  }
+);
+```
+
+### Next.js API Route
+
+```typescript
+import { NextApiRequest, NextApiResponse } from 'next';
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  if (req.method !== 'POST') {
+    return res.status(405).send('Method not allowed');
+  }
+
+  const signature = req.headers['workos-signature'] as string;
+  const chunks = [];
+  
+  for await (const chunk of req) {
+    chunks.push(chunk);
+  }
+  
+  const payload = JSON.parse(Buffer.concat(chunks).toString());
+
+  try {
+    const event = await workos.webhooks.constructEvent({
+      payload,
+      sigHeader: signature,
+      secret: process.env.WORKOS_WEBHOOK_SECRET!,
+    });
+
+    // Handle the event
+    switch (event.event) {
+      case 'user.created':
+        // Handle user creation
+        break;
+      case 'session.created':
+        // Handle session creation
+        break;
+    }
+
+    res.status(200).json({ received: true });
+  } catch (err) {
+    console.error('Webhook verification failed:', err);
+    res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+}
+```
+
+### Fastify
+
+```typescript
+import Fastify from 'fastify';
+import { WorkOS } from '@workos-inc/node';
+
+const fastify = Fastify();
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+
+fastify.post('/webhooks', async (request, reply) => {
+  const signature = request.headers['workos-signature'] as string;
+  
+  try {
+    const event = await workos.webhooks.constructEvent({
+      payload: request.body,
+      sigHeader: signature,
+      secret: process.env.WORKOS_WEBHOOK_SECRET!,
+    });
+    
+    // Process event
+    console.log('Event:', event.event);
+    
+    return { received: true };
+  } catch (err) {
+    reply.code(400);
+    return { error: err.message };
+  }
+});
+```
+
+## Event Types
+
+The `Event` object returned by `constructEvent` can be one of many types. Common event types include:
+
+- **Authentication**: `authentication.sso_succeeded`, `authentication.password_failed`, etc.
+- **Users**: `user.created`, `user.updated`, `user.deleted`
+- **Organizations**: `organization.created`, `organization.updated`, `organization.deleted`
+- **Connections**: `connection.activated`, `connection.deactivated`, `connection.deleted`
+- **Directory Sync**: `dsync.user.created`, `dsync.group.created`, etc.
+- **Sessions**: `session.created`, `session.revoked`
+- **Invitations**: `invitation.created`, `invitation.accepted`
+
+For a complete list of event types, see the [Events API](/api/events) documentation.
+
+## Security Best Practices
+
+1. Always verify webhook signatures before processing events
+2. Use a reasonable tolerance window (3-5 minutes) to prevent replay attacks
+3. Store your webhook secret securely as an environment variable
+4. Use raw body parsing for webhook endpoints to ensure signature verification works correctly
+5. Return a 200 status code quickly and process events asynchronously if needed
+6. Log failed verification attempts for security monitoring

@@ -1,0 +1,711 @@
+---
+title: Error handling
+description: Error handling and exception types in the WorkOS Node.js SDK
+---
+
+The WorkOS Node.js SDK provides structured error handling with specific exception types for different error scenarios. This guide covers all exception types, their properties, and how to handle them effectively.
+
+## Exception hierarchy
+
+All WorkOS exceptions implement the `RequestException` interface and extend the native JavaScript `Error` class:
+
+```typescript
+interface RequestException {
+  status: number;        // HTTP status code
+  name: string;          // Exception class name
+  message: string;       // Human-readable error message
+  requestID: string;     // WorkOS request ID for debugging
+}
+```
+
+## Exception types
+
+### ApiKeyRequiredException
+
+Thrown when an API key is required but not provided.
+
+**Status**: `403`
+
+**When it occurs**: When attempting to call a server-side method without initializing the client with an API key.
+
+From [api-key-required.exception.ts:1](/home/daytona/workspace/source/src/common/exceptions/api-key-required.exception.ts:1):
+
+```typescript
+export class ApiKeyRequiredException extends Error {
+  readonly status = 403;
+  readonly name = 'ApiKeyRequiredException';
+  readonly path: string;
+
+  constructor(path: string) {
+    super(
+      `API key required for "${path}". ` +
+        `For server-side apps, initialize with: new WorkOS("sk_..."). ` +
+        `For browser/mobile/CLI apps, use authenticateWithCodeAndVerifier() and authenticateWithRefreshToken() which work without an API key.`,
+    );
+    this.path = path;
+  }
+}
+```
+
+**Example**:
+
+```typescript
+import { ApiKeyRequiredException } from '@workos-inc/node';
+
+try {
+  const workos = new WorkOS({ clientId: 'client_...' }); // No API key
+  await workos.organizations.listOrganizations(); // Requires API key
+} catch (error) {
+  if (error instanceof ApiKeyRequiredException) {
+    console.error('API key required for:', error.path);
+    console.error('Status:', error.status); // 403
+  }
+}
+```
+
+### UnauthorizedException
+
+Thrown when the API key is invalid or the request cannot be authorized.
+
+**Status**: `401`
+
+**When it occurs**: Invalid or expired API key, missing authentication credentials.
+
+From [unauthorized.exception.ts:3](/home/daytona/workspace/source/src/common/exceptions/unauthorized.exception.ts:3):
+
+```typescript
+export class UnauthorizedException extends Error implements RequestException {
+  readonly status = 401;
+  readonly name = 'UnauthorizedException';
+  readonly message: string;
+
+  constructor(readonly requestID: string) {
+    super();
+    this.message = `Could not authorize the request. Maybe your API key is invalid?`;
+  }
+}
+```
+
+**Example**:
+
+```typescript
+import { UnauthorizedException } from '@workos-inc/node';
+
+try {
+  const workos = new WorkOS('sk_invalid_key');
+  await workos.userManagement.getUser('user_123');
+} catch (error) {
+  if (error instanceof UnauthorizedException) {
+    console.error('Authorization failed');
+    console.error('Request ID:', error.requestID);
+    // Check your API key in the WorkOS dashboard
+  }
+}
+```
+
+### BadRequestException
+
+Thrown when the request is malformed or contains invalid parameters.
+
+**Status**: `400`
+
+**When it occurs**: Invalid request parameters, malformed data, validation failures.
+
+From [bad-request.exception.ts:3](/home/daytona/workspace/source/src/common/exceptions/bad-request.exception.ts:3):
+
+```typescript
+export class BadRequestException extends Error implements RequestException {
+  readonly status = 400;
+  readonly name = 'BadRequestException';
+  readonly message: string = 'Bad request';
+  readonly code?: string;
+  readonly errors?: unknown[];
+  readonly requestID: string;
+
+  constructor({
+    code,
+    errors,
+    message,
+    requestID,
+  }: {
+    code?: string;
+    errors?: unknown[];
+    message?: string;
+    requestID: string;
+  }) {
+    super();
+    this.requestID = requestID;
+    if (message) this.message = message;
+    if (code) this.code = code;
+    if (errors) this.errors = errors;
+  }
+}
+```
+
+**Example**:
+
+```typescript
+import { BadRequestException } from '@workos-inc/node';
+
+try {
+  await workos.userManagement.createUser({
+    email: 'invalid-email', // Invalid format
+  });
+} catch (error) {
+  if (error instanceof BadRequestException) {
+    console.error('Bad request:', error.message);
+    console.error('Error code:', error.code);
+    console.error('Validation errors:', error.errors);
+    console.error('Request ID:', error.requestID);
+  }
+}
+```
+
+### NotFoundException
+
+Thrown when the requested resource cannot be found.
+
+**Status**: `404`
+
+**When it occurs**: Accessing a resource that doesn't exist or has been deleted.
+
+From [not-found.exception.ts:3](/home/daytona/workspace/source/src/common/exceptions/not-found.exception.ts:3):
+
+```typescript
+export class NotFoundException extends Error implements RequestException {
+  readonly status = 404;
+  readonly name = 'NotFoundException';
+  readonly message: string;
+  readonly code?: string;
+  readonly requestID: string;
+
+  constructor({
+    code,
+    message,
+    path,
+    requestID,
+  }: {
+    code?: string;
+    message?: string;
+    path: string;
+    requestID: string;
+  }) {
+    super();
+    this.code = code;
+    this.message =
+      message ?? `The requested path '${path}' could not be found.`;
+    this.requestID = requestID;
+  }
+}
+```
+
+**Example**:
+
+```typescript
+import { NotFoundException } from '@workos-inc/node';
+
+try {
+  await workos.userManagement.getUser('user_nonexistent');
+} catch (error) {
+  if (error instanceof NotFoundException) {
+    console.error('Resource not found:', error.message);
+    console.error('Request ID:', error.requestID);
+    // Handle missing resource (e.g., show 404 page)
+  }
+}
+```
+
+### ConflictException
+
+Thrown when the request conflicts with the current state of the server.
+
+**Status**: `409`
+
+**When it occurs**: Attempting to create a resource that already exists, or modifying a resource that has been changed by another request.
+
+From [conflict.exception.ts:3](/home/daytona/workspace/source/src/common/exceptions/conflict.exception.ts:3):
+
+```typescript
+export class ConflictException extends Error implements RequestException {
+  readonly status = 409;
+  readonly name = 'ConflictException';
+  readonly requestID: string;
+
+  constructor({
+    error,
+    message,
+    requestID,
+  }: {
+    error?: string;
+    message?: string;
+    requestID: string;
+  }) {
+    super();
+    this.requestID = requestID;
+    if (message) {
+      this.message = message;
+    } else if (error) {
+      this.message = `Error: ${error}`;
+    } else {
+      this.message = `An conflict has occurred on the server.`;
+    }
+  }
+}
+```
+
+**Example**:
+
+```typescript
+import { ConflictException } from '@workos-inc/node';
+
+try {
+  await workos.organizations.createOrganization({
+    name: 'Acme Corp',
+    domains: ['acme.com'], // Domain already claimed
+  });
+} catch (error) {
+  if (error instanceof ConflictException) {
+    console.error('Conflict:', error.message);
+    console.error('Request ID:', error.requestID);
+    // Handle conflict (e.g., suggest alternative)
+  }
+}
+```
+
+### UnprocessableEntityException
+
+Thrown when the request is well-formed but cannot be processed due to semantic errors.
+
+**Status**: `422`
+
+**When it occurs**: Business logic validation failures, unmet requirements.
+
+From [unprocessable-entity.exception.ts:4](/home/daytona/workspace/source/src/common/exceptions/unprocessable-entity.exception.ts:4):
+
+```typescript
+export class UnprocessableEntityException
+  extends Error
+  implements RequestException
+{
+  readonly status = 422;
+  readonly name = 'UnprocessableEntityException';
+  readonly message: string = 'Unprocessable entity';
+  readonly code?: string;
+  readonly requestID: string;
+
+  constructor({
+    code,
+    errors,
+    message,
+    requestID,
+  }: {
+    code?: string;
+    errors?: UnprocessableEntityError[];
+    message?: string;
+    requestID: string;
+  }) {
+    super();
+    this.requestID = requestID;
+    if (message) this.message = message;
+    if (code) this.code = code;
+
+    if (errors) {
+      const requirement = errors.length === 1 ? 'requirement' : 'requirements';
+      this.message = `The following ${requirement} must be met:\n`;
+      for (const { code } of errors) {
+        this.message = this.message.concat(`\t${code}\n`);
+      }
+    }
+  }
+}
+```
+
+**Example**:
+
+```typescript
+import { UnprocessableEntityException } from '@workos-inc/node';
+
+try {
+  await workos.userManagement.createUser({
+    email: 'user@example.com',
+    password: '123', // Too weak
+  });
+} catch (error) {
+  if (error instanceof UnprocessableEntityException) {
+    console.error('Validation failed:', error.message);
+    console.error('Error code:', error.code);
+    console.error('Request ID:', error.requestID);
+    // Show validation errors to user
+  }
+}
+```
+
+### RateLimitExceededException
+
+Thrown when the rate limit for API requests has been exceeded.
+
+**Status**: `429`
+
+**When it occurs**: Making too many requests in a short period.
+
+From [rate-limit-exceeded.exception.ts:7](/home/daytona/workspace/source/src/common/exceptions/rate-limit-exceeded.exception.ts:7):
+
+```typescript
+export class RateLimitExceededException extends GenericServerException {
+  readonly name = 'RateLimitExceededException';
+
+  constructor(
+    message: string,
+    requestID: string,
+    /**
+     * The number of seconds to wait before retrying the request.
+     */
+    readonly retryAfter: number | null,
+  ) {
+    super(429, message, {}, requestID);
+  }
+}
+```
+
+**Example**:
+
+```typescript
+import { RateLimitExceededException } from '@workos-inc/node';
+
+async function makeRequestWithRetry() {
+  try {
+    return await workos.userManagement.listUsers();
+  } catch (error) {
+    if (error instanceof RateLimitExceededException) {
+      console.error('Rate limit exceeded');
+      console.error('Request ID:', error.requestID);
+      
+      if (error.retryAfter) {
+        console.log(`Retry after ${error.retryAfter} seconds`);
+        await new Promise(resolve => 
+          setTimeout(resolve, error.retryAfter * 1000)
+        );
+        return makeRequestWithRetry(); // Retry
+      }
+    }
+    throw error;
+  }
+}
+```
+
+### OauthException
+
+Thrown when OAuth authentication fails.
+
+**Status**: Variable (depends on OAuth error)
+
+**When it occurs**: OAuth flow errors, invalid grants, expired tokens.
+
+From [oauth.exception.ts:3](/home/daytona/workspace/source/src/common/exceptions/oauth.exception.ts:3):
+
+```typescript
+export class OauthException extends Error implements RequestException {
+  readonly name = 'OauthException';
+
+  constructor(
+    readonly status: number,
+    readonly requestID: string,
+    readonly error: string | undefined,
+    readonly errorDescription: string | undefined,
+    readonly rawData: unknown,
+  ) {
+    super();
+    if (error && errorDescription) {
+      this.message = `Error: ${error}\nError Description: ${errorDescription}`;
+    } else if (error) {
+      this.message = `Error: ${error}`;
+    } else {
+      this.message = `An error has occurred.`;
+    }
+  }
+}
+```
+
+**Example**:
+
+```typescript
+import { OauthException } from '@workos-inc/node';
+
+try {
+  await workos.userManagement.authenticateWithCode({
+    code: 'expired_code',
+    clientId: 'client_...',
+  });
+} catch (error) {
+  if (error instanceof OauthException) {
+    console.error('OAuth error:', error.error);
+    console.error('Description:', error.errorDescription);
+    console.error('Status:', error.status);
+    console.error('Request ID:', error.requestID);
+  }
+}
+```
+
+### GenericServerException
+
+Thrown for general server errors that don't fit other categories.
+
+**Status**: Variable (5xx server errors)
+
+**When it occurs**: Internal server errors, service unavailable, unexpected errors.
+
+From [generic-server.exception.ts:3](/home/daytona/workspace/source/src/common/exceptions/generic-server.exception.ts:3):
+
+```typescript
+export class GenericServerException extends Error implements RequestException {
+  readonly name: string = 'GenericServerException';
+  readonly message: string = 'The request could not be completed.';
+
+  constructor(
+    readonly status: number,
+    message: string | undefined,
+    readonly rawData: unknown,
+    readonly requestID: string,
+  ) {
+    super();
+    if (message) {
+      this.message = message;
+    }
+  }
+}
+```
+
+**Example**:
+
+```typescript
+import { GenericServerException } from '@workos-inc/node';
+
+try {
+  await workos.userManagement.getUser('user_123');
+} catch (error) {
+  if (error instanceof GenericServerException) {
+    console.error('Server error:', error.message);
+    console.error('Status:', error.status);
+    console.error('Request ID:', error.requestID);
+    console.error('Raw data:', error.rawData);
+    // Implement retry logic or alert monitoring
+  }
+}
+```
+
+### ParseError
+
+Thrown when the response body cannot be parsed as JSON.
+
+**Status**: `500`
+
+**When it occurs**: Malformed JSON in API response, network corruption.
+
+From [parse-error.ts:3](/home/daytona/workspace/source/src/common/exceptions/parse-error.ts:3):
+
+```typescript
+export class ParseError extends Error implements RequestException {
+  readonly name = 'ParseError';
+  readonly status = 500;
+  readonly rawBody: string;
+  readonly rawStatus: number;
+  readonly requestID: string;
+
+  constructor({
+    message,
+    rawBody,
+    rawStatus,
+    requestID,
+  }: {
+    message: string;
+    rawBody: string;
+    requestID: string;
+    rawStatus: number;
+  }) {
+    super(message);
+    this.rawBody = rawBody;
+    this.rawStatus = rawStatus;
+    this.requestID = requestID;
+  }
+}
+```
+
+**Example**:
+
+```typescript
+import { ParseError } from '@workos-inc/node';
+
+try {
+  await workos.userManagement.getUser('user_123');
+} catch (error) {
+  if (error instanceof ParseError) {
+    console.error('Failed to parse response:', error.message);
+    console.error('Raw body:', error.rawBody);
+    console.error('Status:', error.rawStatus);
+    console.error('Request ID:', error.requestID);
+    // Report to WorkOS support with request ID
+  }
+}
+```
+
+## Error handling implementation
+
+The SDK handles errors in the `handleHttpError` method:
+
+From [workos.ts:430](/home/daytona/workspace/source/src/workos.ts:430):
+
+```typescript
+private handleHttpError({ path, error }: { path: string; error: unknown }) {
+  if (!(error instanceof HttpClientError)) {
+    throw new Error(`Unexpected error: ${error}`, { cause: error });
+  }
+
+  const { response } = error as HttpClientError<WorkOSResponseError>;
+
+  if (response) {
+    const { status, data, headers } = response;
+    const requestID = headers['X-Request-ID'] ?? '';
+    const { code, error_description, error, errors, message } = data;
+
+    switch (status) {
+      case 401:
+        throw new UnauthorizedException(requestID);
+      case 409:
+        throw new ConflictException({ requestID, message, error });
+      case 422:
+        throw new UnprocessableEntityException({ code, errors, message, requestID });
+      case 404:
+        throw new NotFoundException({ code, message, path, requestID });
+      case 429:
+        const retryAfter = headers.get('Retry-After');
+        throw new RateLimitExceededException(
+          data.message,
+          requestID,
+          retryAfter ? Number(retryAfter) : null,
+        );
+      default:
+        if (error || error_description) {
+          throw new OauthException(status, requestID, error, error_description, data);
+        } else if (code && errors) {
+          throw new BadRequestException({ code, errors, message, requestID });
+        } else {
+          throw new GenericServerException(status, data.message, data, requestID);
+        }
+    }
+  }
+}
+```
+
+## Best practices
+
+### Always catch specific exceptions
+
+```typescript
+try {
+  await workos.userManagement.getUser('user_123');
+} catch (error) {
+  if (error instanceof NotFoundException) {
+    // Handle missing user
+  } else if (error instanceof UnauthorizedException) {
+    // Handle auth failure
+  } else if (error instanceof RateLimitExceededException) {
+    // Handle rate limit
+  } else {
+    // Handle unexpected errors
+    throw error;
+  }
+}
+```
+
+### Use request IDs for debugging
+
+All exceptions include a `requestID` property that can be used to debug issues with WorkOS support:
+
+```typescript
+try {
+  await workos.userManagement.getUser('user_123');
+} catch (error) {
+  if ('requestID' in error) {
+    console.error(`Request ID for support: ${error.requestID}`);
+  }
+}
+```
+
+### Implement retry logic for rate limits
+
+```typescript
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries = 3
+): Promise<T> {
+  let lastError;
+  
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      
+      if (error instanceof RateLimitExceededException) {
+        const delay = error.retryAfter 
+          ? error.retryAfter * 1000 
+          : Math.pow(2, i) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      
+      throw error; // Don't retry other errors
+    }
+  }
+  
+  throw lastError;
+}
+
+// Usage
+const users = await withRetry(() => workos.userManagement.listUsers());
+```
+
+### Type-safe error handling
+
+```typescript
+import { 
+  NotFoundException,
+  UnauthorizedException,
+  RateLimitExceededException 
+} from '@workos-inc/node';
+
+function handleWorkOSError(error: unknown): void {
+  if (error instanceof NotFoundException) {
+    console.log('Resource not found');
+  } else if (error instanceof UnauthorizedException) {
+    console.log('Invalid credentials');
+  } else if (error instanceof RateLimitExceededException) {
+    console.log(`Rate limited. Retry after ${error.retryAfter}s`);
+  } else {
+    console.error('Unexpected error:', error);
+  }
+}
+```
+
+## Summary
+
+<CardGroup cols={2}>
+  <Card title="Structured exceptions" icon="list-tree">
+    All exceptions implement a consistent interface with status codes and request IDs.
+  </Card>
+  <Card title="Type safety" icon="shield-check">
+    Use TypeScript's instanceof to handle specific exception types.
+  </Card>
+  <Card title="Request IDs" icon="fingerprint">
+    Every exception includes a request ID for debugging with WorkOS support.
+  </Card>
+  <Card title="Retry logic" icon="arrows-rotate">
+    Implement retry logic for rate limits using the retryAfter property.
+  </Card>
+</CardGroup>
+
+## Related resources
+
+- [Authentication](/concepts/authentication)
+- [Client initialization](/concepts/client-initialization)
+- [PKCE flow](/concepts/pkce-flow)

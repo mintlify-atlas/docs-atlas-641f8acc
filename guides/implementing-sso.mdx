@@ -1,0 +1,333 @@
+---
+title: Implementing SSO
+description: Complete guide to implementing Single Sign-On with the WorkOS Node SDK
+---
+
+This guide walks you through implementing Single Sign-On (SSO) using the WorkOS Node SDK, from generating authorization URLs to exchanging codes for user profiles.
+
+## Prerequisites
+
+Install and configure the WorkOS SDK:
+
+```bash
+npm install @workos-inc/node
+```
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+```
+
+## Implementation Steps
+
+<Steps>
+  <Step title="Generate an Authorization URL">
+    Create an authorization URL to redirect users to their identity provider:
+
+    ```typescript
+    const authorizationUrl = workos.sso.getAuthorizationUrl({
+      provider: 'GoogleOAuth',
+      clientId: 'client_123',
+      redirectUri: 'https://yourapp.com/callback',
+      state: 'custom-state-value'
+    });
+
+    // Redirect user to authorizationUrl
+    ```
+
+    You can specify an SSO connection, organization, or provider:
+
+    ```typescript
+    // Using a specific connection
+    const url = workos.sso.getAuthorizationUrl({
+      connection: 'conn_123',
+      clientId: 'client_123',
+      redirectUri: 'https://yourapp.com/callback'
+    });
+
+    // Using an organization
+    const url = workos.sso.getAuthorizationUrl({
+      organization: 'org_123',
+      clientId: 'client_123',
+      redirectUri: 'https://yourapp.com/callback'
+    });
+    ```
+  </Step>
+
+  <Step title="Handle the OAuth Callback">
+    After authentication, WorkOS redirects users back to your `redirectUri` with a `code` parameter:
+
+    ```typescript
+    // In your callback route handler
+    app.get('/callback', async (req, res) => {
+      const { code } = req.query;
+
+      try {
+        const { profile, accessToken } = await workos.sso.getProfileAndToken({
+          code: code as string,
+          clientId: 'client_123'
+        });
+
+        // Handle successful authentication
+        console.log('User profile:', profile);
+      } catch (error) {
+        console.error('Authentication failed:', error);
+      }
+    });
+    ```
+  </Step>
+
+  <Step title="Access User Profile Data">
+    The profile object contains user information from the identity provider:
+
+    ```typescript
+    const { profile, accessToken, oauthTokens } = await workos.sso.getProfileAndToken({
+      code: authorizationCode,
+      clientId: 'client_123'
+    });
+
+    console.log(profile.id);              // prof_123
+    console.log(profile.email);           // user@example.com
+    console.log(profile.firstName);       // John
+    console.log(profile.lastName);        // Doe
+    console.log(profile.organizationId);  // org_123
+    console.log(profile.connectionId);    // conn_123
+    console.log(profile.connectionType);  // OktaSAML
+    console.log(profile.groups);          // ['Admins', 'Engineering']
+    console.log(profile.rawAttributes);   // Full IdP attributes
+    ```
+  </Step>
+
+  <Step title="Retrieve Profile with Access Token">
+    Use an access token to retrieve the user profile later:
+
+    ```typescript
+    const profile = await workos.sso.getProfile({
+      accessToken: 'access_token_value'
+    });
+
+    console.log(profile.email);
+    ```
+  </Step>
+</Steps>
+
+## Using PKCE for Public Clients
+
+For applications that cannot securely store a client secret (mobile apps, SPAs, CLI tools), use PKCE:
+
+### Automatic PKCE Generation
+
+```typescript
+const { url, state, codeVerifier } = await workos.sso.getAuthorizationUrlWithPKCE({
+  connection: 'conn_123',
+  clientId: 'client_123',
+  redirectUri: 'myapp://callback'
+});
+
+// Store state and codeVerifier securely
+// Redirect user to url
+```
+
+### Exchange Code with PKCE
+
+```typescript
+const { profile, accessToken } = await workos.sso.getProfileAndToken({
+  code: authorizationCode,
+  clientId: 'client_123',
+  codeVerifier: storedCodeVerifier  // Pass the stored code verifier
+});
+```
+
+### Manual PKCE Implementation
+
+```typescript
+// Generate PKCE parameters manually
+const pkce = await workos.pkce.generate();
+
+const authorizationUrl = workos.sso.getAuthorizationUrl({
+  connection: 'conn_123',
+  clientId: 'client_123',
+  redirectUri: 'myapp://callback',
+  codeChallenge: pkce.codeChallenge,
+  codeChallengeMethod: 'S256'
+});
+
+// Store pkce.codeVerifier securely for later use
+```
+
+## Advanced Options
+
+### Domain and Login Hints
+
+Provide hints to pre-fill the authentication form:
+
+```typescript
+const authorizationUrl = workos.sso.getAuthorizationUrl({
+  provider: 'GoogleOAuth',
+  clientId: 'client_123',
+  redirectUri: 'https://yourapp.com/callback',
+  domainHint: 'company.com',        // Pre-fill domain
+  loginHint: 'user@company.com'     // Pre-fill email
+});
+```
+
+### Provider Scopes
+
+Request additional scopes from OAuth providers:
+
+```typescript
+const authorizationUrl = workos.sso.getAuthorizationUrl({
+  provider: 'GoogleOAuth',
+  clientId: 'client_123',
+  redirectUri: 'https://yourapp.com/callback',
+  providerScopes: ['profile', 'email', 'calendar']
+});
+```
+
+### Provider Query Parameters
+
+Pass custom parameters to the identity provider:
+
+```typescript
+const authorizationUrl = workos.sso.getAuthorizationUrl({
+  provider: 'GoogleOAuth',
+  clientId: 'client_123',
+  redirectUri: 'https://yourapp.com/callback',
+  providerQueryParams: {
+    custom_param: 'custom_value',
+    another_param: 123
+  }
+});
+```
+
+## Managing SSO Connections
+
+### List Connections
+
+```typescript
+const connections = await workos.sso.listConnections({
+  organizationId: 'org_123',
+  connectionType: 'OktaSAML'
+});
+
+for await (const connection of connections.autoPagination()) {
+  console.log(connection.id, connection.name);
+}
+```
+
+### Get a Connection
+
+```typescript
+const connection = await workos.sso.getConnection('conn_123');
+
+console.log(connection.type);           // OktaSAML
+console.log(connection.state);          // active
+console.log(connection.organizationId); // org_123
+```
+
+### Delete a Connection
+
+```typescript
+await workos.sso.deleteConnection('conn_123');
+```
+
+## Working with OAuth Tokens
+
+Some connections return OAuth tokens for accessing provider APIs:
+
+```typescript
+const { profile, accessToken, oauthTokens } = await workos.sso.getProfileAndToken({
+  code: authorizationCode,
+  clientId: 'client_123'
+});
+
+if (oauthTokens) {
+  console.log(oauthTokens.accessToken);   // OAuth access token
+  console.log(oauthTokens.refreshToken);  // OAuth refresh token
+  console.log(oauthTokens.expiresAt);     // Token expiration timestamp
+  console.log(oauthTokens.scopes);        // Granted scopes
+}
+```
+
+## Custom Attributes
+
+Type-safe access to custom attributes from your IdP:
+
+```typescript
+interface CustomAttributes {
+  department: string;
+  employeeId: string;
+}
+
+const { profile } = await workos.sso.getProfileAndToken<CustomAttributes>({
+  code: authorizationCode,
+  clientId: 'client_123'
+});
+
+console.log(profile.customAttributes.department);
+console.log(profile.customAttributes.employeeId);
+```
+
+## Error Handling
+
+```typescript
+try {
+  const { profile } = await workos.sso.getProfileAndToken({
+    code: authorizationCode,
+    clientId: 'client_123'
+  });
+} catch (error) {
+  if (error.code === 'invalid_grant') {
+    console.error('Authorization code expired or invalid');
+  } else {
+    console.error('Authentication failed:', error.message);
+  }
+}
+```
+
+## Complete Example
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+import express from 'express';
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+const app = express();
+
+app.get('/login', (req, res) => {
+  const authorizationUrl = workos.sso.getAuthorizationUrl({
+    organization: 'org_123',
+    clientId: process.env.WORKOS_CLIENT_ID,
+    redirectUri: 'http://localhost:3000/callback',
+    state: req.session.id
+  });
+
+  res.redirect(authorizationUrl);
+});
+
+app.get('/callback', async (req, res) => {
+  const { code } = req.query;
+
+  try {
+    const { profile, accessToken } = await workos.sso.getProfileAndToken({
+      code: code as string,
+      clientId: process.env.WORKOS_CLIENT_ID
+    });
+
+    // Create session, store user data
+    req.session.user = {
+      id: profile.id,
+      email: profile.email,
+      organizationId: profile.organizationId
+    };
+
+    res.redirect('/dashboard');
+  } catch (error) {
+    console.error('SSO authentication failed:', error);
+    res.redirect('/login?error=authentication_failed');
+  }
+});
+
+app.listen(3000);
+```

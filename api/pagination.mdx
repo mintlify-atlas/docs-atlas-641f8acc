@@ -1,0 +1,239 @@
+---
+title: Pagination
+description: Utilities for automatic pagination of list resources
+---
+
+# Pagination
+
+The `AutoPaginatable` class provides automatic pagination for list resources, allowing you to fetch all results across multiple pages with built-in rate limiting.
+
+## Installation
+
+```typescript
+import { AutoPaginatable } from '@workos-inc/node';
+```
+
+## Class
+
+### AutoPaginatable
+
+A generic class that wraps paginated list responses and provides automatic pagination.
+
+```typescript
+class AutoPaginatable<ResourceType, ParametersType>
+```
+
+**Type Parameters**
+
+<ParamField path="ResourceType" type="generic" required>
+  The type of resource being paginated (e.g., User, Organization)
+</ParamField>
+
+<ParamField path="ParametersType" type="PaginationOptions" default="PaginationOptions">
+  Optional extended pagination parameters
+</ParamField>
+
+**Constructor Parameters**
+
+<ParamField path="list" type="List<ResourceType>" required>
+  The initial list response containing data and metadata
+</ParamField>
+
+<ParamField path="apiCall" type="(params: PaginationOptions) => Promise<List<ResourceType>>" required>
+  Function to fetch the next page of results
+</ParamField>
+
+<ParamField path="options" type="ParametersType">
+  Pagination options for subsequent requests
+</ParamField>
+
+## Properties
+
+### data
+
+Access the current page of data.
+
+**Type:** `ResourceType[]`
+
+```typescript
+const paginatedList = new AutoPaginatable(response, fetchUsers);
+console.log(paginatedList.data); // Array of users from current page
+```
+
+### listMetadata
+
+Access pagination metadata for the current page.
+
+**Type:** `{ before?: string | null; after?: string | null }`
+
+```typescript
+console.log(paginatedList.listMetadata);
+// { before: null, after: "user_123" }
+```
+
+### options
+
+The pagination options used for API calls.
+
+**Type:** `ParametersType`
+
+### object
+
+Always returns `'list'` to identify the response type.
+
+**Type:** `'list'`
+
+## Methods
+
+### autoPagination()
+
+Automatically paginates over the list of results, returning the complete data set. Implements automatic rate limiting (4 requests per second) to respect API rate limits.
+
+**Returns**
+
+<ResponseField name="results" type="ResourceType[]">
+  Array of all resources across all pages
+</ResponseField>
+
+**Behavior**
+
+- If `options.limit` was passed to the initial request, returns only the first page (`data`)
+- Otherwise, fetches all pages and returns the complete dataset
+- Automatically adds 350ms delay between requests (4rps rate limit)
+- Uses `after` cursor for pagination
+
+**Example**
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_test_key');
+
+// Get first page
+const response = await workos.userManagement.listUsers();
+
+// Get all users across all pages
+const allUsers = await response.autoPagination();
+
+console.log(`Total users: ${allUsers.length}`);
+```
+
+## Types
+
+### PaginationOptions
+
+Options for controlling pagination behavior.
+
+<ParamField path="limit" type="number">
+  Maximum number of results per page
+</ParamField>
+
+<ParamField path="before" type="string | null">
+  Cursor for fetching the previous page
+</ParamField>
+
+<ParamField path="after" type="string | null">
+  Cursor for fetching the next page
+</ParamField>
+
+<ParamField path="order" type="'asc' | 'desc'">
+  Sort order for results
+</ParamField>
+
+### List
+
+The list response structure.
+
+```typescript
+interface List<T>
+```
+
+<ResponseField name="object" type="'list'" required>
+  Always 'list'
+</ResponseField>
+
+<ResponseField name="data" type="T[]" required>
+  Array of resources
+</ResponseField>
+
+<ResponseField name="listMetadata" type="object" required>
+  Pagination metadata
+  
+  <ResponseField name="before" type="string | null">
+    Cursor for previous page
+  </ResponseField>
+  
+  <ResponseField name="after" type="string | null">
+    Cursor for next page
+  </ResponseField>
+</ResponseField>
+
+## Usage Examples
+
+### Paginate with limit
+
+```typescript
+const workos = new WorkOS('sk_test_key');
+
+// Fetch only first 50 users
+const response = await workos.userManagement.listUsers({ limit: 50 });
+const users = await response.autoPagination();
+
+console.log(users.length); // 50 (only first page)
+```
+
+### Paginate all results
+
+```typescript
+// Fetch all users across all pages
+const response = await workos.userManagement.listUsers();
+const allUsers = await response.autoPagination();
+
+console.log(allUsers.length); // Total count across all pages
+```
+
+### Manual pagination
+
+```typescript
+let response = await workos.userManagement.listUsers({ limit: 100 });
+const users = [...response.data];
+
+while (response.listMetadata.after) {
+  response = await workos.userManagement.listUsers({
+    limit: 100,
+    after: response.listMetadata.after
+  });
+  users.push(...response.data);
+}
+
+console.log(`Total users: ${users.length}`);
+```
+
+### Process results in batches
+
+```typescript
+const response = await workos.userManagement.listUsers();
+
+// Process first page immediately
+processBatch(response.data);
+
+// Then fetch and process remaining pages
+if (response.listMetadata.after) {
+  const remaining = await response.autoPagination();
+  processRemainingBatches(remaining);
+}
+```
+
+## Rate Limiting
+
+The `autoPagination()` method automatically implements rate limiting:
+
+- Adds 350ms delay between requests
+- Achieves ~4 requests per second
+- Respects WorkOS list API rate limits
+- No manual throttling required
+
+```typescript
+// This automatically rate limits to 4rps
+const allUsers = await response.autoPagination();
+```

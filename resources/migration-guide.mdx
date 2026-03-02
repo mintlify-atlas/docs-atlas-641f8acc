@@ -1,0 +1,393 @@
+---
+title: Migration Guide
+description: Upgrade guides for migrating between major versions of the WorkOS Node SDK
+---
+
+This guide helps you migrate your code between major versions of the WorkOS Node SDK.
+
+## Migrating from v7 to v8
+
+Version 8 is a major release focused on universal runtime compatibility, PKCE authentication support, and API modernization.
+
+### Update Requirements
+
+#### Node.js Version
+
+**Change:** Minimum Node.js version increased from 16 to 20.
+
+```bash
+# Check your Node version
+node --version
+
+# Should be v20.15.0 or higher
+```
+
+**Why:** Node 18 reached end-of-life in April 2025.
+
+#### Package Type
+
+The package is now ESM-first with dual CJS/ESM exports. Most users won't need changes, but custom build configurations may require adjustments.
+
+### Directory Sync Changes
+
+#### DirectoryUser Interface
+
+**Changed:** Removed top-level fields in favor of `customAttributes`.
+
+<CodeGroup>
+```typescript v7
+const user = await workos.directorySync.getUser({ userId });
+
+console.log(user.emails);
+console.log(user.username);
+console.log(user.jobTitle);
+```
+
+```typescript v8
+const user = await workos.directorySync.getUser({ userId });
+
+console.log(user.customAttributes?.emails);
+console.log(user.customAttributes?.username);
+console.log(user.customAttributes?.jobTitle);
+```
+</CodeGroup>
+
+**Removed:**
+- `user.emails` → Use `user.customAttributes?.emails`
+- `user.username` → Use `user.customAttributes?.username`
+- `user.jobTitle` → Use `user.customAttributes?.jobTitle`
+- `getPrimaryEmail()` utility function
+
+### User Management Changes
+
+#### Removed Methods
+
+<CodeGroup>
+```typescript v7
+// Old method names
+await workos.userManagement.sendMagicAuthCode(options);
+await workos.userManagement.sendPasswordResetEmail(options);
+await workos.userManagement.refreshAndSealSessionData(options);
+```
+
+```typescript v8
+// New method names
+await workos.userManagement.sendMagicCode(options);
+await workos.userManagement.sendPasswordResetEmail(options);
+// Use new session helper methods instead
+```
+</CodeGroup>
+
+#### Authorization URL Options
+
+**Removed:** The `context` field is no longer supported.
+
+<CodeGroup>
+```typescript v7
+const url = await workos.userManagement.getAuthorizationUrl({
+  provider: 'authkit',
+  redirectUri: 'https://example.com/callback',
+  context: 'some-context', // No longer supported
+});
+```
+
+```typescript v8
+const url = await workos.userManagement.getAuthorizationUrl({
+  provider: 'authkit',
+  redirectUri: 'https://example.com/callback',
+  // context field removed
+});
+```
+</CodeGroup>
+
+#### List Organization Memberships
+
+**Changed:** Now requires either `userId` or `organizationId`.
+
+<CodeGroup>
+```typescript v7
+// Could call without parameters
+const memberships = await workos.userManagement.listOrganizationMemberships();
+```
+
+```typescript v8
+// Must specify userId or organizationId
+const memberships = await workos.userManagement.listOrganizationMemberships({
+  userId: 'user_123',
+});
+
+// OR
+const memberships = await workos.userManagement.listOrganizationMemberships({
+  organizationId: 'org_456',
+});
+```
+</CodeGroup>
+
+### SSO Changes
+
+#### Authorization URL Options Type
+
+**Changed:** Converted to discriminated union for better type safety.
+
+<CodeGroup>
+```typescript v7
+// Multiple options allowed (unsafe)
+const url = await workos.sso.getAuthorizationUrl({
+  connection: 'conn_123',
+  organization: 'org_456', // Both accepted
+  redirectUri: 'https://example.com/callback',
+});
+```
+
+```typescript v8
+// Mutually exclusive (enforced by TypeScript)
+const url = await workos.sso.getAuthorizationUrl({
+  connection: 'conn_123', // Only ONE of: connection, organization, or provider
+  redirectUri: 'https://example.com/callback',
+});
+```
+</CodeGroup>
+
+**Removed:** The `domain` field (deprecated).
+
+### MFA Changes
+
+#### Verify Factor Method
+
+**Changed:** Method renamed for clarity.
+
+<CodeGroup>
+```typescript v7
+await workos.mfa.verifyFactor({
+  authenticationFactorId: 'auth_factor_123',
+  code: '123456',
+});
+```
+
+```typescript v8
+await workos.mfa.verifyChallenge({
+  authenticationFactorId: 'auth_factor_123',
+  code: '123456',
+});
+```
+</CodeGroup>
+
+### Organizations Changes
+
+#### Organization Options
+
+**Removed fields:**
+- `allowProfilesOutsideOrganization`
+- `domains` (use `domainData` instead)
+
+<CodeGroup>
+```typescript v7
+await workos.organizations.createOrganization({
+  name: 'Acme Corp',
+  domains: ['acme.com'],
+  allowProfilesOutsideOrganization: true,
+});
+```
+
+```typescript v8
+await workos.organizations.createOrganization({
+  name: 'Acme Corp',
+  domainData: [{ domain: 'acme.com' }],
+  // allowProfilesOutsideOrganization removed
+});
+```
+</CodeGroup>
+
+### Vault Changes
+
+#### Method Names
+
+**Changed:** All `*Secret` methods renamed to `*Object`.
+
+<CodeGroup>
+```typescript v7
+// Old method names
+await workos.vault.createSecret(options);
+await workos.vault.listSecrets(options);
+await workos.vault.readSecret(options);
+await workos.vault.updateSecret(options);
+await workos.vault.deleteSecret(options);
+```
+
+```typescript v8
+// New method names
+await workos.vault.createObject(options);
+await workos.vault.listObjects(options);
+await workos.vault.readObject(options);
+await workos.vault.updateObject(options);
+await workos.vault.deleteObject(options);
+```
+</CodeGroup>
+
+### Events Changes
+
+#### Event Types
+
+**Changed:** Event type renamed.
+
+<CodeGroup>
+```typescript v7
+if (event.event === 'dsync.deactivated') {
+  // Handle deactivation
+}
+```
+
+```typescript v8
+if (event.event === 'dsync.deleted') {
+  // Handle deletion
+}
+```
+</CodeGroup>
+
+**Removed event types:**
+- `OrganizationMembershipAdded`
+- `OrganizationMembershipRemoved`
+
+### New Features in v8
+
+#### PKCE Authentication
+
+Version 8 adds full support for PKCE authentication, enabling public clients.
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+// Initialize without API key (public client)
+const workos = new WorkOS({ clientId: 'client_123' });
+
+// Generate authorization URL with PKCE
+const { url, codeVerifier } = 
+  await workos.userManagement.getAuthorizationUrlWithPKCE({
+    provider: 'authkit',
+    redirectUri: 'myapp://callback',
+  });
+
+// Exchange code for tokens
+const { accessToken, refreshToken } = 
+  await workos.userManagement.authenticateWithCode({
+    code: authorizationCode,
+    codeVerifier,
+  });
+```
+
+<Info>
+  See the [User Management API](/api/user-management) and [PKCE Flow](/concepts/pkce-flow) guide for more details on PKCE authentication.
+</Info>
+
+#### Type-Safe Client Modes
+
+Use the `createWorkOS()` factory for compile-time type safety.
+
+```typescript
+import { createWorkOS } from '@workos-inc/node';
+
+// Public client - only PKCE methods available
+const publicClient = createWorkOS({ clientId: 'client_123' });
+publicClient.userManagement.getAuthorizationUrlWithPKCE({ ... }); // ✅ Works
+publicClient.userManagement.listUsers(); // ❌ TypeScript error
+
+// Confidential client - full access
+const serverClient = createWorkOS({ 
+  apiKey: 'sk_...', 
+  clientId: 'client_123' 
+});
+serverClient.userManagement.listUsers(); // ✅ Works
+```
+
+#### Universal Runtime Support
+
+Version 8 works seamlessly across multiple JavaScript runtimes.
+
+<CodeGroup>
+```typescript Node.js
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_...');
+```
+
+```typescript Cloudflare Workers
+import { WorkOS } from '@workos-inc/node/worker';
+
+const workos = new WorkOS('sk_...');
+```
+
+```typescript Deno
+import { WorkOS } from 'npm:@workos-inc/node';
+
+const workos = new WorkOS('sk_...');
+```
+
+```typescript Bun
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_...');
+```
+</CodeGroup>
+
+### Migration Checklist
+
+<Steps>
+  <Step title="Update Node.js">
+    Ensure you're running Node.js 20.15.0 or higher.
+    
+    ```bash
+    node --version
+    ```
+  </Step>
+  
+  <Step title="Update Package">
+    Update to the latest version of the SDK.
+    
+    ```bash
+    npm install @workos-inc/node@latest
+    ```
+  </Step>
+  
+  <Step title="Update Directory Sync">
+    Replace `user.emails`, `user.username`, and `user.jobTitle` with `user.customAttributes.*`
+  </Step>
+  
+  <Step title="Update User Management">
+    - Remove `context` from authorization URL options
+    - Add `userId` or `organizationId` to `listOrganizationMemberships()`
+    - Update deprecated method names
+  </Step>
+  
+  <Step title="Update SSO">
+    Ensure authorization URL options use only one of: `connection`, `organization`, or `provider`
+  </Step>
+  
+  <Step title="Update MFA">
+    Replace `verifyFactor()` with `verifyChallenge()`
+  </Step>
+  
+  <Step title="Update Organizations">
+    Replace `domains` with `domainData` and remove `allowProfilesOutsideOrganization`
+  </Step>
+  
+  <Step title="Update Vault">
+    Replace all `*Secret` methods with `*Object` methods
+  </Step>
+  
+  <Step title="Update Events">
+    Replace `dsync.deactivated` with `dsync.deleted`
+  </Step>
+  
+  <Step title="Test Thoroughly">
+    Run your test suite and verify all integrations work correctly.
+  </Step>
+</Steps>
+
+## Need Help?
+
+If you encounter issues during migration:
+
+- Check the [Changelog](/resources/changelog) for detailed release notes
+- Review the [API Reference](/api/workos-client) for updated method signatures
+- [Open an issue](https://github.com/workos/workos-node/issues) on GitHub
+- Contact [support@workos.com](mailto:support@workos.com)

@@ -1,80 +1,269 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Get started with the WorkOS Node.js SDK in minutes
 ---
 
-## Get started in three steps
+This guide will help you set up the WorkOS SDK and authenticate your first user.
 
-Get your documentation site running locally and make your first customization.
+## Step 1: Install the SDK
 
-### Step 1: Set up your local environment
+First, install the WorkOS Node.js SDK:
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
+<CodeGroup>
+
+```bash npm
+npm install @workos-inc/node
+```
+
+```bash yarn
+yarn add @workos-inc/node
+```
+
+```bash pnpm
+pnpm add @workos-inc/node
+```
+
+```bash bun
+bun add @workos-inc/node
+```
+
+</CodeGroup>
+
+## Step 2: Get your API key
+
+<Steps>
+  <Step title="Sign in to WorkOS Dashboard">
+    Navigate to the [WorkOS Dashboard](https://dashboard.workos.com) and sign in to your account.
+  </Step>
+  
+  <Step title="Create an API key">
+    Go to the API Keys section and create a new API key. Copy the key - you'll need it in the next step.
+  </Step>
+  
+  <Step title="Set environment variable">
+    Add your API key to your environment variables:
     
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
+    ```bash .env
+    WORKOS_API_KEY="sk_test_1234567890"
+    WORKOS_CLIENT_ID="client_1234567890"
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  Keep your API key secure! Never commit it to version control or expose it in client-side code.
+</Warning>
+
+## Step 3: Initialize the client
+
+Create a WorkOS client instance. The SDK offers multiple initialization methods:
+
+<Tabs>
+  <Tab title="Environment Variables">
+    ```typescript
+    import { WorkOS } from '@workos-inc/node';
+
+    // Automatically reads WORKOS_API_KEY and WORKOS_CLIENT_ID from environment
+    const workos = new WorkOS();
+    ```
     
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    <Info>
+      This is the recommended approach for server-side applications.
+    </Info>
+  </Tab>
+  
+  <Tab title="String Parameter">
+    ```typescript
+    import { WorkOS } from '@workos-inc/node';
 
-### Step 2: Deploy your changes
+    // Pass API key directly as string
+    const workos = new WorkOS('sk_test_1234567890');
+    ```
+  </Tab>
+  
+  <Tab title="Options Object">
+    ```typescript
+    import { WorkOS } from '@workos-inc/node';
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
+    // Pass options object with API key and client ID
+    const workos = new WorkOS({
+      apiKey: 'sk_test_1234567890',
+      clientId: 'client_1234567890',
+    });
+    ```
+  </Tab>
+  
+  <Tab title="Public Client (PKCE)">
+    ```typescript
+    import { WorkOS } from '@workos-inc/node';
+
+    // For browser/mobile apps - no API key needed
+    const workos = new WorkOS({
+      clientId: 'client_1234567890',
+    });
+    ```
     
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    <Info>
+      Use this for applications that cannot securely store an API key (mobile apps, CLI tools, browser apps).
+    </Info>
+  </Tab>
+</Tabs>
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+## Step 4: Authenticate a user
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+Now let's authenticate a user using WorkOS AuthKit:
 
-### Step 3: Go live
+<Steps>
+  <Step title="Generate an authorization URL">
+    ```typescript
+    import { WorkOS } from '@workos-inc/node';
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    const workos = new WorkOS();
+
+    const authorizationUrl = workos.userManagement.getAuthorizationUrl({
+      provider: 'authkit',
+      redirectUri: 'https://your-app.com/callback',
+      clientId: workos.clientId!,
+    });
+
+    // Redirect user to authorizationUrl
+    console.log('Redirect to:', authorizationUrl);
+    ```
+  </Step>
+  
+  <Step title="Handle the callback">
+    After the user authenticates, WorkOS redirects them back to your callback URL with an authorization code:
+    
+    ```typescript
+    import { WorkOS } from '@workos-inc/node';
+
+    const workos = new WorkOS();
+
+    // In your callback route handler
+    async function handleCallback(code: string) {
+      const { user, accessToken, refreshToken } = 
+        await workos.userManagement.authenticateWithCode({
+          code,
+          clientId: workos.clientId!,
+        });
+
+      console.log('User:', user);
+      console.log('Access token:', accessToken);
+      
+      return { user, accessToken, refreshToken };
+    }
+    ```
+  </Step>
+  
+  <Step title="Get user information">
+    Use the access token to retrieve user information:
+    
+    ```typescript
+    const user = await workos.userManagement.getUser({
+      userId: user.id,
+    });
+
+    console.log('User email:', user.email);
+    console.log('User name:', user.firstName, user.lastName);
+    ```
+  </Step>
+</Steps>
+
+## Complete example
+
+Here's a complete example using Express.js:
+
+```typescript
+import express from 'express';
+import { WorkOS } from '@workos-inc/node';
+
+const app = express();
+const workos = new WorkOS();
+
+// Login route - redirect to WorkOS
+app.get('/login', (req, res) => {
+  const authorizationUrl = workos.userManagement.getAuthorizationUrl({
+    provider: 'authkit',
+    redirectUri: 'http://localhost:3000/callback',
+    clientId: workos.clientId!,
+  });
+  
+  res.redirect(authorizationUrl);
+});
+
+// Callback route - handle the response from WorkOS
+app.get('/callback', async (req, res) => {
+  try {
+    const { code } = req.query;
+    
+    const { user, accessToken } = 
+      await workos.userManagement.authenticateWithCode({
+        code: code as string,
+        clientId: workos.clientId!,
+      });
+    
+    // Store the session and redirect to your app
+    res.json({ user, accessToken });
+  } catch (error) {
+    console.error('Authentication error:', error);
+    res.status(500).send('Authentication failed');
+  }
+});
+
+app.listen(3000, () => {
+  console.log('Server running on http://localhost:3000');
+});
+```
+
+## PKCE authentication (for public clients)
+
+For applications that cannot securely store a secret (mobile, CLI, desktop apps), use PKCE:
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS({ clientId: 'client_1234567890' });
+
+// Generate auth URL with PKCE
+const { url, codeVerifier } = 
+  await workos.userManagement.getAuthorizationUrlWithPKCE({
+    provider: 'authkit',
+    redirectUri: 'myapp://callback',
+    clientId: workos.clientId!,
+  });
+
+// Store codeVerifier securely (e.g., iOS Keychain, Android Keystore)
+// Redirect user to url
+
+// After callback, exchange code for tokens
+const { accessToken, refreshToken } = 
+  await workos.userManagement.authenticateWithCode({
+    code: authorizationCode,
+    codeVerifier, // Retrieved from secure storage
+    clientId: workos.clientId!,
+  });
+```
+
+<Warning>
+  For PKCE flows, you **must** store the `codeVerifier` securely on-device between generating the authorization URL and handling the callback. The verifier must survive app restarts during the authentication flow.
+</Warning>
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="Configuration" icon="gear" href="/configuration">
+    Learn about advanced configuration options
+  </Card>
+  
+  <Card title="User Management Guide" icon="users" href="/guides/user-authentication">
+    Explore user management features
+  </Card>
+  
+  <Card title="SSO Integration" icon="key" href="/guides/implementing-sso">
+    Set up Single Sign-On for enterprises
+  </Card>
+  
+  <Card title="API Reference" icon="book" href="https://workos.com/docs/reference/client-libraries">
+    View the complete API reference
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

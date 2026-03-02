@@ -1,0 +1,539 @@
+---
+title: Fine-Grained Authorization (FGA) API
+description: Deprecated - Use the Authorization API instead
+---
+
+<Warning>
+  The FGA module is deprecated. Please use the [Authorization API](/api/authorization) instead for all new implementations.
+</Warning>
+
+The Fine-Grained Authorization (FGA) API provides a flexible authorization system based on relationship-based access control (ReBAC). This API is deprecated and maintained for backward compatibility only.
+
+## Initialize
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_example_123456789');
+```
+
+## Methods
+
+### check
+
+Check if a subject has a specific relation to a resource.
+
+```typescript
+const result = await workos.fga.check({
+  checks: [
+    {
+      resource: { resourceType: 'document', resourceId: 'doc_123' },
+      relation: 'viewer',
+      subject: { resourceType: 'user', resourceId: 'user_456' },
+    },
+  ],
+});
+
+console.log(result.isAuthorized());
+```
+
+<ParamField path="checkOptions" type="CheckOptions" required>
+  <Expandable title="properties">
+    <ParamField path="op" type="CheckOp" optional>
+      Operator for combining multiple checks (`and`, `or`).
+    </ParamField>
+    <ParamField path="checks" type="CheckWarrantOptions[]" required>
+      Array of warrant checks to perform.
+    </ParamField>
+    <ParamField path="debug" type="boolean" optional>
+      Enable debug mode for detailed decision tree.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="options" type="CheckRequestOptions" optional>
+  <Expandable title="properties">
+    <ParamField path="warrantToken" type="string" optional>
+      Warrant token for consistent reads.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="result" type="CheckResult">
+  <Expandable title="properties">
+    <ResponseField name="result" type="string">
+      Result of the check.
+    </ResponseField>
+    <ResponseField name="isImplicit" type="boolean">
+      Whether the authorization is implicit.
+    </ResponseField>
+    <ResponseField name="warrantToken" type="string">
+      Token for consistent reads.
+    </ResponseField>
+    <ResponseField name="isAuthorized()" type="() => boolean">
+      Helper method to check if authorized.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+### checkBatch
+
+Perform multiple independent authorization checks.
+
+```typescript
+const results = await workos.fga.checkBatch({
+  checks: [
+    {
+      resource: { resourceType: 'document', resourceId: 'doc_123' },
+      relation: 'viewer',
+      subject: { resourceType: 'user', resourceId: 'user_456' },
+    },
+    {
+      resource: { resourceType: 'document', resourceId: 'doc_789' },
+      relation: 'editor',
+      subject: { resourceType: 'user', resourceId: 'user_456' },
+    },
+  ],
+});
+
+results.forEach((result) => {
+  console.log(result.isAuthorized());
+});
+```
+
+<ParamField path="checkOptions" type="CheckBatchOptions" required>
+  <Expandable title="properties">
+    <ParamField path="checks" type="CheckWarrantOptions[]" required>
+      Array of warrant checks to perform.
+    </ParamField>
+    <ParamField path="debug" type="boolean" optional>
+      Enable debug mode.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="results" type="CheckResult[]">
+  Array of check results, one for each check.
+</ResponseField>
+
+---
+
+### createResource
+
+Create a new FGA resource.
+
+```typescript
+const resource = await workos.fga.createResource({
+  resource: {
+    resourceType: 'document',
+    resourceId: 'doc_123',
+  },
+  meta: {
+    name: 'My Document',
+    owner: 'user_456',
+  },
+});
+```
+
+<ParamField path="resource" type="CreateResourceOptions" required>
+  <Expandable title="properties">
+    <ParamField path="resource" type="ResourceInterface | ResourceOptions" required>
+      Resource identifier.
+    </ParamField>
+    <ParamField path="meta" type="object" optional>
+      Metadata for the resource.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="resource" type="Resource">
+  The created resource object.
+</ResponseField>
+
+---
+
+### getResource
+
+Retrieve a resource by type and ID.
+
+```typescript
+const resource = await workos.fga.getResource({
+  resourceType: 'document',
+  resourceId: 'doc_123',
+});
+
+console.log(resource.meta);
+```
+
+<ParamField path="resource" type="ResourceInterface | ResourceOptions" required>
+  <Expandable title="properties">
+    <ParamField path="resourceType" type="string" required>
+      Type of the resource.
+    </ParamField>
+    <ParamField path="resourceId" type="string" required>
+      ID of the resource.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="resource" type="Resource">
+  The resource object.
+</ResponseField>
+
+---
+
+### listResources
+
+Retrieve a list of resources.
+
+```typescript
+const resources = await workos.fga.listResources({
+  resourceType: 'document',
+  search: 'contract',
+  limit: 20,
+});
+
+for await (const resource of resources) {
+  console.log(resource.resourceId, resource.meta);
+}
+```
+
+<ParamField path="options" type="ListResourcesOptions" optional>
+  <Expandable title="properties">
+    <ParamField path="resourceType" type="string" optional>
+      Filter by resource type.
+    </ParamField>
+    <ParamField path="search" type="string" optional>
+      Search query for resources.
+    </ParamField>
+    <ParamField path="before" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+    <ParamField path="after" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+    <ParamField path="limit" type="number" optional>
+      Maximum number of records to return.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="resources" type="AutoPaginatable<Resource>">
+  An auto-paginatable list of resources.
+</ResponseField>
+
+---
+
+### updateResource
+
+Update a resource's metadata.
+
+```typescript
+const resource = await workos.fga.updateResource({
+  resource: {
+    resourceType: 'document',
+    resourceId: 'doc_123',
+  },
+  meta: {
+    name: 'Updated Document Name',
+  },
+});
+```
+
+<ParamField path="options" type="UpdateResourceOptions" required>
+  <Expandable title="properties">
+    <ParamField path="resource" type="ResourceInterface | ResourceOptions" required>
+      Resource identifier.
+    </ParamField>
+    <ParamField path="meta" type="object" required>
+      Updated metadata.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="resource" type="Resource">
+  The updated resource object.
+</ResponseField>
+
+---
+
+### deleteResource
+
+Delete a resource.
+
+```typescript
+await workos.fga.deleteResource({
+  resourceType: 'document',
+  resourceId: 'doc_123',
+});
+```
+
+<ParamField path="resource" type="DeleteResourceOptions" required>
+  <Expandable title="properties">
+    <ParamField path="resourceType" type="string" required>
+      Type of the resource.
+    </ParamField>
+    <ParamField path="resourceId" type="string" required>
+      ID of the resource to delete.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+---
+
+### batchWriteResources
+
+Create or delete multiple resources in a single operation.
+
+```typescript
+const resources = await workos.fga.batchWriteResources({
+  op: 'CREATE',
+  resources: [
+    {
+      resource: { resourceType: 'document', resourceId: 'doc_123' },
+      meta: { name: 'Document 1' },
+    },
+    {
+      resource: { resourceType: 'document', resourceId: 'doc_456' },
+      meta: { name: 'Document 2' },
+    },
+  ],
+});
+```
+
+<ParamField path="options" type="BatchWriteResourcesOptions" required>
+  <Expandable title="properties">
+    <ParamField path="op" type="ResourceOp" required>
+      Operation: `CREATE` or `DELETE`.
+    </ParamField>
+    <ParamField path="resources" type="CreateResourceOptions[] | DeleteResourceOptions[]" required>
+      Array of resources to create or delete.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="resources" type="Resource[]">
+  Array of created/deleted resources.
+</ResponseField>
+
+---
+
+### writeWarrant
+
+Create or delete a warrant (relationship between subject and resource).
+
+```typescript
+const warrantToken = await workos.fga.writeWarrant({
+  op: 'CREATE',
+  resource: { resourceType: 'document', resourceId: 'doc_123' },
+  relation: 'viewer',
+  subject: { resourceType: 'user', resourceId: 'user_456' },
+});
+
+console.log(warrantToken.token);
+```
+
+<ParamField path="options" type="WriteWarrantOptions" required>
+  <Expandable title="properties">
+    <ParamField path="op" type="WarrantOp" optional>
+      Operation: `CREATE` or `DELETE` (default: `CREATE`).
+    </ParamField>
+    <ParamField path="resource" type="ResourceInterface | ResourceOptions" required>
+      Resource identifier.
+    </ParamField>
+    <ParamField path="relation" type="string" required>
+      Relation type (e.g., 'viewer', 'editor', 'owner').
+    </ParamField>
+    <ParamField path="subject" type="ResourceInterface | Subject" required>
+      Subject (user or group) to grant/revoke relation.
+    </ParamField>
+    <ParamField path="policy" type="string" optional>
+      Policy string for conditional access.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="warrantToken" type="WarrantToken">
+  <Expandable title="properties">
+    <ResponseField name="token" type="string">
+      Warrant token for consistent reads.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+### batchWriteWarrants
+
+Create or delete multiple warrants in a single operation.
+
+```typescript
+const warrantToken = await workos.fga.batchWriteWarrants([
+  {
+    op: 'CREATE',
+    resource: { resourceType: 'document', resourceId: 'doc_123' },
+    relation: 'viewer',
+    subject: { resourceType: 'user', resourceId: 'user_456' },
+  },
+  {
+    op: 'CREATE',
+    resource: { resourceType: 'document', resourceId: 'doc_123' },
+    relation: 'editor',
+    subject: { resourceType: 'user', resourceId: 'user_789' },
+  },
+]);
+```
+
+<ParamField path="options" type="WriteWarrantOptions[]" required>
+  Array of warrant write operations.
+</ParamField>
+
+<ResponseField name="warrantToken" type="WarrantToken">
+  Warrant token for consistent reads.
+</ResponseField>
+
+---
+
+### listWarrants
+
+Retrieve a list of warrants.
+
+```typescript
+const warrants = await workos.fga.listWarrants({
+  resourceType: 'document',
+  resourceId: 'doc_123',
+  limit: 20,
+});
+
+for await (const warrant of warrants) {
+  console.log(warrant.relation, warrant.subject);
+}
+```
+
+<ParamField path="options" type="ListWarrantsOptions" optional>
+  <Expandable title="properties">
+    <ParamField path="resourceType" type="string" optional>
+      Filter by resource type.
+    </ParamField>
+    <ParamField path="resourceId" type="string" optional>
+      Filter by resource ID.
+    </ParamField>
+    <ParamField path="relation" type="string" optional>
+      Filter by relation.
+    </ParamField>
+    <ParamField path="subjectType" type="string" optional>
+      Filter by subject type.
+    </ParamField>
+    <ParamField path="subjectId" type="string" optional>
+      Filter by subject ID.
+    </ParamField>
+    <ParamField path="subjectRelation" type="string" optional>
+      Filter by subject relation.
+    </ParamField>
+    <ParamField path="limit" type="number" optional>
+      Maximum number of records to return.
+    </ParamField>
+    <ParamField path="after" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="warrants" type="AutoPaginatable<Warrant>">
+  An auto-paginatable list of warrants.
+</ResponseField>
+
+---
+
+### query
+
+Query for resources or subjects based on warrants.
+
+```typescript
+const results = await workos.fga.query({
+  select: 'subject',
+  resourceType: 'document',
+  resourceId: 'doc_123',
+  relation: 'viewer',
+});
+
+for await (const result of results) {
+  console.log(result.resourceType, result.resourceId);
+}
+```
+
+<ParamField path="options" type="QueryOptions" required>
+  <Expandable title="properties">
+    <ParamField path="select" type="'resource' | 'subject'" required>
+      What to query for.
+    </ParamField>
+    <ParamField path="resourceType" type="string" optional>
+      Resource type to filter by.
+    </ParamField>
+    <ParamField path="resourceId" type="string" optional>
+      Resource ID to filter by.
+    </ParamField>
+    <ParamField path="relation" type="string" optional>
+      Relation to filter by.
+    </ParamField>
+    <ParamField path="subjectType" type="string" optional>
+      Subject type to filter by.
+    </ParamField>
+    <ParamField path="subjectId" type="string" optional>
+      Subject ID to filter by.
+    </ParamField>
+    <ParamField path="subjectRelation" type="string" optional>
+      Subject relation to filter by.
+    </ParamField>
+    <ParamField path="context" type="PolicyContext" optional>
+      Policy context for conditional queries.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="results" type="FgaPaginatable<QueryResult>">
+  A paginatable list of query results.
+</ResponseField>
+
+## Migration Guide
+
+To migrate from FGA to the Authorization API:
+
+1. Replace `workos.fga.check()` with `workos.authorization.check()`
+2. Replace resource management with `workos.authorization.createResource()`, etc.
+3. Use `workos.authorization.assignRole()` instead of warrant operations
+4. See the [Authorization API documentation](/api/authorization) for complete details
+
+## Example: Access Control with FGA
+
+```typescript
+// Create resources
+await workos.fga.createResource({
+  resource: { resourceType: 'document', resourceId: 'doc_123' },
+  meta: { name: 'Confidential Report' },
+});
+
+// Grant viewer access
+await workos.fga.writeWarrant({
+  resource: { resourceType: 'document', resourceId: 'doc_123' },
+  relation: 'viewer',
+  subject: { resourceType: 'user', resourceId: 'user_456' },
+});
+
+// Check access
+const result = await workos.fga.check({
+  checks: [
+    {
+      resource: { resourceType: 'document', resourceId: 'doc_123' },
+      relation: 'viewer',
+      subject: { resourceType: 'user', resourceId: 'user_456' },
+    },
+  ],
+});
+
+if (result.isAuthorized()) {
+  console.log('Access granted');
+}
+```

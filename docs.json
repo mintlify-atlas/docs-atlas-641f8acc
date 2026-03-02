@@ -1,122 +1,154 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "WorkOS Node.js SDK",
+  "theme": "linden",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#6363F1",
+    "light": "#8E8EF5",
+    "dark": "#4A4AC4"
   },
-  "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/workos/workos-node"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/workos/workos-node"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Getting Started",
             "pages": [
-              "index",
+              "introduction",
+              "installation",
               "quickstart",
-              "development"
+              "configuration"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Concepts",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "concepts/authentication",
+              "concepts/client-initialization",
+              "concepts/pkce-flow",
+              "concepts/error-handling"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Runtime Support",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
-            ]
-          },
-          {
-            "group": "AI tools",
-            "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "runtimes/overview",
+              "runtimes/nodejs",
+              "runtimes/edge-workers",
+              "runtimes/deno-bun"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Client",
             "pages": [
-              "api-reference/introduction"
+              "api/workos-client"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Authentication & Users",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/user-management",
+              "api/sso",
+              "api/passwordless",
+              "api/mfa"
+            ]
+          },
+          {
+            "group": "Organizations & Access",
+            "pages": [
+              "api/organizations",
+              "api/organization-domains",
+              "api/directory-sync",
+              "api/authorization",
+              "api/fga",
+              "api/roles"
+            ]
+          },
+          {
+            "group": "Security & Compliance",
+            "pages": [
+              "api/audit-logs",
+              "api/webhooks",
+              "api/vault"
+            ]
+          },
+          {
+            "group": "Additional Features",
+            "pages": [
+              "api/events",
+              "api/feature-flags",
+              "api/portal",
+              "api/widgets",
+              "api/actions",
+              "api/api-keys",
+              "api/pipes"
+            ]
+          },
+          {
+            "group": "Utilities",
+            "pages": [
+              "api/pkce",
+              "api/pagination",
+              "api/exceptions"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Guides",
+        "groups": [
+          {
+            "group": "Common Tasks",
+            "pages": [
+              "guides/implementing-sso",
+              "guides/user-authentication",
+              "guides/managing-organizations",
+              "guides/directory-synchronization",
+              "guides/handling-webhooks"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "guides/public-client-mode",
+              "guides/session-management",
+              "guides/audit-logging",
+              "guides/multi-tenancy"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Resources",
+        "groups": [
+          {
+            "group": "Reference",
+            "pages": [
+              "resources/changelog",
+              "resources/migration-guide",
+              "resources/typescript-support",
+              "resources/contributing"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

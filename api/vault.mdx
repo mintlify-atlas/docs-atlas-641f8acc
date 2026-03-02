@@ -1,0 +1,567 @@
+---
+title: Vault API
+description: Securely encrypt, store, and manage sensitive data with end-to-end encryption
+---
+
+The Vault API provides methods for securely storing sensitive data with automatic encryption, managing encrypted objects, and handling data encryption keys.
+
+## Create Object
+
+Creates a new encrypted object in the vault.
+
+```typescript
+const metadata = await workos.vault.createObject({
+  name: 'api_key_stripe',
+  value: 'sk_live_1234567890abcdef',
+  context: {
+    environment: 'production',
+    service: 'payment'
+  }
+});
+```
+
+### Parameters
+
+<ParamField path="options" type="object" required>
+  <ParamField path="name" type="string" required>
+    Unique name for the vault object. Used to retrieve the object later.
+  </ParamField>
+  
+  <ParamField path="value" type="string" required>
+    The sensitive data to encrypt and store.
+  </ParamField>
+  
+  <ParamField path="context" type="KeyContext" required>
+    Key-value pairs used for encryption context. This context must be provided when decrypting the data.
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="id" type="string">
+  Unique identifier for the vault object.
+</ResponseField>
+
+<ResponseField name="environmentId" type="string">
+  ID of the environment where the object is stored.
+</ResponseField>
+
+<ResponseField name="keyId" type="string">
+  ID of the encryption key used.
+</ResponseField>
+
+<ResponseField name="context" type="KeyContext">
+  The encryption context provided when creating the object.
+</ResponseField>
+
+<ResponseField name="versionId" type="string">
+  Version ID for this object.
+</ResponseField>
+
+<ResponseField name="updatedAt" type="Date">
+  Timestamp when the object was last updated.
+</ResponseField>
+
+<ResponseField name="updatedBy" type="object">
+  Information about who last updated the object.
+  
+  <Expandable title="updatedBy properties">
+    <ResponseField name="id" type="string">
+      User or API key ID.
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      Name of the updater.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## List Objects
+
+Retrieves a paginated list of vault objects.
+
+```typescript
+const { data, listMetadata } = await workos.vault.listObjects({
+  limit: 20,
+  after: 'vault_obj_01HEZYMVP4E1Q5QFZGS4Z0WM25'
+});
+
+data.forEach(obj => {
+  console.log(obj.name, obj.updatedAt);
+});
+```
+
+### Parameters
+
+<ParamField path="options" type="object">
+  <ParamField path="limit" type="number">
+    Maximum number of objects to return. Default is 10.
+  </ParamField>
+  
+  <ParamField path="after" type="string">
+    Cursor for pagination. Use the `listMetadata.after` value from a previous response.
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="data" type="array">
+  Array of object digests.
+  
+  <Expandable title="digest properties">
+    <ResponseField name="id" type="string">
+      Unique identifier for the object.
+    </ResponseField>
+    
+    <ResponseField name="name" type="string">
+      Name of the vault object.
+    </ResponseField>
+    
+    <ResponseField name="updatedAt" type="Date">
+      When the object was last updated.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="listMetadata" type="object">
+  Pagination metadata.
+  
+  <Expandable title="metadata properties">
+    <ResponseField name="after" type="string">
+      Cursor for the next page of results.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## Read Object
+
+Retrieves a vault object by its ID, including the encrypted value.
+
+```typescript
+const vaultObject = await workos.vault.readObject({
+  id: 'vault_obj_01HEZYMVP4E1Q5QFZGS4Z0WM25'
+});
+
+console.log('Name:', vaultObject.name);
+console.log('Value:', vaultObject.value); // Encrypted
+```
+
+### Parameters
+
+<ParamField path="options" type="object" required>
+  <ParamField path="id" type="string" required>
+    The ID of the vault object to retrieve.
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="id" type="string">
+  Unique identifier for the object.
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  Name of the vault object.
+</ResponseField>
+
+<ResponseField name="value" type="string">
+  The encrypted value (base64-encoded ciphertext).
+</ResponseField>
+
+<ResponseField name="metadata" type="object">
+  Object metadata including encryption context and version information.
+</ResponseField>
+
+---
+
+## Read Object by Name
+
+Retrieves a vault object by its unique name.
+
+```typescript
+const vaultObject = await workos.vault.readObjectByName('api_key_stripe');
+console.log('Value:', vaultObject.value);
+```
+
+### Parameters
+
+<ParamField path="name" type="string" required>
+  The unique name of the vault object.
+</ParamField>
+
+### Response
+
+Returns the same structure as [Read Object](#read-object).
+
+---
+
+## Describe Object
+
+Retrieves metadata about a vault object without returning the encrypted value.
+
+```typescript
+const metadata = await workos.vault.describeObject({
+  id: 'vault_obj_01HEZYMVP4E1Q5QFZGS4Z0WM25'
+});
+
+console.log('Context:', metadata.metadata.context);
+console.log('Last updated:', metadata.metadata.updatedAt);
+```
+
+### Parameters
+
+<ParamField path="options" type="object" required>
+  <ParamField path="id" type="string" required>
+    The ID of the vault object.
+  </ParamField>
+</ParamField>
+
+### Response
+
+Returns a vault object with metadata but without the `value` field.
+
+---
+
+## Update Object
+
+Updates the value of an existing vault object.
+
+```typescript
+const updated = await workos.vault.updateObject({
+  id: 'vault_obj_01HEZYMVP4E1Q5QFZGS4Z0WM25',
+  value: 'sk_live_new_key_9876543210',
+  versionCheck: 'version_abc123' // Optional: prevent race conditions
+});
+```
+
+### Parameters
+
+<ParamField path="options" type="object" required>
+  <ParamField path="id" type="string" required>
+    The ID of the vault object to update.
+  </ParamField>
+  
+  <ParamField path="value" type="string" required>
+    The new value to encrypt and store.
+  </ParamField>
+  
+  <ParamField path="versionCheck" type="string">
+    Optional version ID. If provided, the update will only succeed if the current version matches this value. Prevents concurrent modification issues.
+  </ParamField>
+</ParamField>
+
+### Response
+
+Returns the updated vault object with new version information.
+
+---
+
+## Delete Object
+
+Permanently deletes a vault object.
+
+```typescript
+await workos.vault.deleteObject({
+  id: 'vault_obj_01HEZYMVP4E1Q5QFZGS4Z0WM25'
+});
+```
+
+### Parameters
+
+<ParamField path="options" type="object" required>
+  <ParamField path="id" type="string" required>
+    The ID of the vault object to delete.
+  </ParamField>
+</ParamField>
+
+### Response
+
+Returns a Promise that resolves to `void` when deletion is successful.
+
+---
+
+## List Object Versions
+
+Retrieves all versions of a vault object.
+
+```typescript
+const versions = await workos.vault.listObjectVersions({
+  id: 'vault_obj_01HEZYMVP4E1Q5QFZGS4Z0WM25'
+});
+
+versions.forEach(version => {
+  console.log(`Version ${version.id}: ${version.createdAt}`);
+  console.log(`Current: ${version.currentVersion}`);
+});
+```
+
+### Parameters
+
+<ParamField path="options" type="object" required>
+  <ParamField path="id" type="string" required>
+    The ID of the vault object.
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="versions" type="array">
+  Array of version objects.
+  
+  <Expandable title="version properties">
+    <ResponseField name="id" type="string">
+      Unique version identifier.
+    </ResponseField>
+    
+    <ResponseField name="createdAt" type="Date">
+      When this version was created.
+    </ResponseField>
+    
+    <ResponseField name="currentVersion" type="boolean">
+      Whether this is the current active version.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+## Create Data Key
+
+Generates a new data encryption key for client-side encryption.
+
+```typescript
+const keyPair = await workos.vault.createDataKey({
+  context: {
+    environment: 'production',
+    purpose: 'file_encryption'
+  }
+});
+
+console.log('Plain key:', keyPair.dataKey.key);
+console.log('Encrypted keys:', keyPair.encryptedKeys);
+```
+
+### Parameters
+
+<ParamField path="options" type="object" required>
+  <ParamField path="context" type="KeyContext" required>
+    Encryption context for the data key. Must be provided when decrypting.
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="context" type="KeyContext">
+  The encryption context provided.
+</ResponseField>
+
+<ResponseField name="dataKey" type="object">
+  The plaintext data key.
+  
+  <Expandable title="dataKey properties">
+    <ResponseField name="key" type="string">
+      Base64-encoded plaintext encryption key. Use this for encryption operations.
+    </ResponseField>
+    
+    <ResponseField name="id" type="string">
+      Unique identifier for this data key.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="encryptedKeys" type="string">
+  Base64-encoded encrypted version of the data key. Store this alongside your encrypted data.
+</ResponseField>
+
+---
+
+## Decrypt Data Key
+
+Decrypts an encrypted data key for use in decryption operations.
+
+```typescript
+const dataKey = await workos.vault.decryptDataKey({
+  keys: encryptedKeysString
+});
+
+// Use dataKey.key for decryption
+```
+
+### Parameters
+
+<ParamField path="options" type="object" required>
+  <ParamField path="keys" type="string" required>
+    Base64-encoded encrypted keys string from `createDataKey`.
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="key" type="string">
+  Base64-encoded plaintext encryption key.
+</ResponseField>
+
+<ResponseField name="id" type="string">
+  Unique identifier for the data key.
+</ResponseField>
+
+---
+
+## Encrypt
+
+Client-side encryption of data using WorkOS-managed keys.
+
+```typescript
+const encryptedData = await workos.vault.encrypt(
+  'sensitive customer data',
+  {
+    environment: 'production',
+    data_type: 'pii'
+  },
+  'additional authenticated data' // Optional
+);
+
+// Store encryptedData in your database
+```
+
+### Parameters
+
+<ParamField path="data" type="string" required>
+  The plaintext data to encrypt.
+</ParamField>
+
+<ParamField path="context" type="KeyContext" required>
+  Encryption context. Must match when decrypting.
+</ParamField>
+
+<ParamField path="associatedData" type="string">
+  Optional additional authenticated data (AAD) for AES-GCM encryption. Provides additional integrity protection.
+</ParamField>
+
+### Response
+
+Returns a base64-encoded string containing the IV, authentication tag, encrypted keys, and ciphertext.
+
+---
+
+## Decrypt
+
+Client-side decryption of data encrypted with the `encrypt` method.
+
+```typescript
+const plaintext = await workos.vault.decrypt(
+  encryptedData,
+  'additional authenticated data' // Must match what was used during encryption
+);
+
+console.log('Decrypted:', plaintext);
+```
+
+### Parameters
+
+<ParamField path="encryptedData" type="string" required>
+  Base64-encoded encrypted data from the `encrypt` method.
+</ParamField>
+
+<ParamField path="associatedData" type="string">
+  Optional AAD. Must match the value used during encryption.
+</ParamField>
+
+### Response
+
+Returns the decrypted plaintext string.
+
+---
+
+## End-to-End Encryption Example
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+
+// Encrypt sensitive data
+const sensitiveData = {
+  ssn: '123-45-6789',
+  creditCard: '4111-1111-1111-1111'
+};
+
+const context = {
+  userId: 'user_123',
+  environment: 'production'
+};
+
+// Method 1: Vault storage (recommended for secrets)
+const metadata = await workos.vault.createObject({
+  name: 'user_123_payment_info',
+  value: JSON.stringify(sensitiveData),
+  context
+});
+
+// Later, retrieve and use
+const vaultObject = await workos.vault.readObjectByName('user_123_payment_info');
+const decrypted = JSON.parse(vaultObject.value);
+
+// Method 2: Client-side encryption (for application data)
+const encrypted = await workos.vault.encrypt(
+  JSON.stringify(sensitiveData),
+  context
+);
+
+// Store encrypted in your database
+await db.users.update(userId, { encryptedData: encrypted });
+
+// Later, decrypt
+const retrieved = await db.users.findById(userId);
+const decrypted = await workos.vault.decrypt(retrieved.encryptedData);
+const data = JSON.parse(decrypted);
+```
+
+## Encryption Context Best Practices
+
+1. **Use meaningful context**: Include identifiers that relate to the data being encrypted (e.g., user ID, tenant ID, data type)
+2. **Consistency is key**: Use the same context structure across your application
+3. **Don't include sensitive data**: Context values are not encrypted
+4. **Version your contexts**: Consider including a version field for schema evolution
+
+```typescript
+const context = {
+  version: '1',
+  tenantId: 'tenant_123',
+  userId: 'user_456',
+  dataType: 'payment_method',
+  environment: process.env.NODE_ENV
+};
+```
+
+## Version Control
+
+Vault objects support versioning to help you:
+- Track changes to sensitive data
+- Rollback to previous values if needed
+- Prevent concurrent modification conflicts
+
+```typescript
+// Get all versions
+const versions = await workos.vault.listObjectVersions({
+  id: 'vault_obj_01HEZYMVP4E1Q5QFZGS4Z0WM25'
+});
+
+// Update with version check to prevent race conditions
+const currentVersion = versions.find(v => v.currentVersion);
+
+try {
+  await workos.vault.updateObject({
+    id: 'vault_obj_01HEZYMVP4E1Q5QFZGS4Z0WM25',
+    value: 'new secret value',
+    versionCheck: currentVersion.id
+  });
+} catch (error) {
+  // Handle version mismatch - object was modified by another process
+  console.error('Concurrent modification detected');
+}
+```

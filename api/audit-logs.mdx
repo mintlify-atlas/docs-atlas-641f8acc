@@ -1,0 +1,380 @@
+---
+title: Audit Logs API
+description: Track and export security events with comprehensive audit logging
+---
+
+The Audit Logs API enables you to record security-relevant events in your application and export them for compliance and analysis purposes.
+
+## Create Event
+
+Records an audit log event for an organization.
+
+```typescript
+await workos.auditLogs.createEvent(
+  'org_01HEZYMVP4E1Q5QFZGS4Z0WM25',
+  {
+    action: 'user.login_succeeded',
+    occurredAt: new Date(),
+    actor: {
+      id: 'user_01HEZYMVP4E1Q5QFZGS4Z0WM25',
+      name: 'Jane Doe',
+      type: 'user',
+      metadata: {
+        role: 'admin'
+      }
+    },
+    targets: [
+      {
+        id: 'resource_123',
+        name: 'Production Database',
+        type: 'database'
+      }
+    ],
+    context: {
+      location: '192.168.1.1',
+      userAgent: 'Mozilla/5.0'
+    },
+    metadata: {
+      success: true,
+      method: 'password'
+    }
+  },
+  {
+    idempotencyKey: 'unique-event-key-123'
+  }
+);
+```
+
+### Parameters
+
+<ParamField path="organization" type="string" required>
+  The ID of the organization to create the audit log event for.
+</ParamField>
+
+<ParamField path="event" type="object" required>
+  The audit log event details.
+  
+  <Expandable title="event properties">
+    <ParamField path="action" type="string" required>
+      The action that was performed (e.g., `user.login_succeeded`, `document.deleted`).
+    </ParamField>
+    
+    <ParamField path="occurredAt" type="Date" required>
+      The timestamp when the event occurred.
+    </ParamField>
+    
+    <ParamField path="actor" type="object" required>
+      The entity that performed the action.
+      
+      <Expandable title="actor properties">
+        <ParamField path="id" type="string" required>
+          Unique identifier for the actor.
+        </ParamField>
+        
+        <ParamField path="name" type="string">
+          Human-readable name of the actor.
+        </ParamField>
+        
+        <ParamField path="type" type="string" required>
+          The type of actor (e.g., `user`, `system`, `api_key`).
+        </ParamField>
+        
+        <ParamField path="metadata" type="Record<string, string | number | boolean>">
+          Additional metadata about the actor.
+        </ParamField>
+      </Expandable>
+    </ParamField>
+    
+    <ParamField path="targets" type="array" required>
+      The resources that were affected by the action.
+      
+      <Expandable title="target properties">
+        <ParamField path="id" type="string" required>
+          Unique identifier for the target.
+        </ParamField>
+        
+        <ParamField path="name" type="string">
+          Human-readable name of the target.
+        </ParamField>
+        
+        <ParamField path="type" type="string" required>
+          The type of target (e.g., `document`, `user`, `organization`).
+        </ParamField>
+        
+        <ParamField path="metadata" type="Record<string, string | number | boolean>">
+          Additional metadata about the target.
+        </ParamField>
+      </Expandable>
+    </ParamField>
+    
+    <ParamField path="context" type="object" required>
+      Contextual information about where and how the action occurred.
+      
+      <Expandable title="context properties">
+        <ParamField path="location" type="string" required>
+          IP address or location identifier where the event occurred.
+        </ParamField>
+        
+        <ParamField path="userAgent" type="string">
+          User agent string of the client that triggered the event.
+        </ParamField>
+      </Expandable>
+    </ParamField>
+    
+    <ParamField path="version" type="number">
+      Schema version number for this action type. Defaults to 1.
+    </ParamField>
+    
+    <ParamField path="metadata" type="Record<string, string | number | boolean>">
+      Additional custom metadata for the event.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="options" type="object">
+  Request options.
+  
+  <Expandable title="options properties">
+    <ParamField path="idempotencyKey" type="string">
+      Unique key to prevent duplicate event creation. Auto-generated if not provided.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Response
+
+Returns a Promise that resolves to `void` when the event is successfully created.
+
+---
+
+## Create Export
+
+Creates an export of audit log events matching the specified criteria.
+
+```typescript
+const auditLogExport = await workos.auditLogs.createExport({
+  organizationId: 'org_01HEZYMVP4E1Q5QFZGS4Z0WM25',
+  rangeStart: new Date('2024-01-01'),
+  rangeEnd: new Date('2024-01-31'),
+  actions: ['user.login_succeeded', 'user.login_failed'],
+  actorNames: ['Jane Doe'],
+  actorIds: ['user_01HEZYMVP4E1Q5QFZGS4Z0WM25'],
+  targets: ['database']
+});
+```
+
+### Parameters
+
+<ParamField path="options" type="object" required>
+  <ParamField path="organizationId" type="string" required>
+    The ID of the organization to export audit logs for.
+  </ParamField>
+  
+  <ParamField path="rangeStart" type="Date" required>
+    Start date for the export range.
+  </ParamField>
+  
+  <ParamField path="rangeEnd" type="Date" required>
+    End date for the export range.
+  </ParamField>
+  
+  <ParamField path="actions" type="string[]">
+    Filter by specific action types.
+  </ParamField>
+  
+  <ParamField path="actorNames" type="string[]">
+    Filter by actor names.
+  </ParamField>
+  
+  <ParamField path="actorIds" type="string[]">
+    Filter by actor IDs.
+  </ParamField>
+  
+  <ParamField path="targets" type="string[]">
+    Filter by target types.
+  </ParamField>
+</ParamField>
+
+### Response
+
+<ResponseField name="object" type="string">
+  Always `audit_log_export`.
+</ResponseField>
+
+<ResponseField name="id" type="string">
+  Unique identifier for the export.
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  Current state of the export: `pending`, `ready`, or `error`.
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  Download URL for the export. Available when state is `ready`.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 timestamp when the export was created.
+</ResponseField>
+
+<ResponseField name="updatedAt" type="string">
+  ISO 8601 timestamp when the export was last updated.
+</ResponseField>
+
+---
+
+## Get Export
+
+Retrieves the status and details of an audit log export.
+
+```typescript
+const auditLogExport = await workos.auditLogs.getExport(
+  'audit_log_export_01HEZYMVP4E1Q5QFZGS4Z0WM25'
+);
+
+if (auditLogExport.state === 'ready') {
+  console.log('Download URL:', auditLogExport.url);
+}
+```
+
+### Parameters
+
+<ParamField path="auditLogExportId" type="string" required>
+  The ID of the audit log export to retrieve.
+</ParamField>
+
+### Response
+
+<ResponseField name="object" type="string">
+  Always `audit_log_export`.
+</ResponseField>
+
+<ResponseField name="id" type="string">
+  Unique identifier for the export.
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  Current state of the export: `pending`, `ready`, or `error`.
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  Download URL for the export. Available when state is `ready`.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 timestamp when the export was created.
+</ResponseField>
+
+<ResponseField name="updatedAt" type="string">
+  ISO 8601 timestamp when the export was last updated.
+</ResponseField>
+
+---
+
+## Create Schema
+
+Defines a schema for an audit log action type to validate event structure.
+
+```typescript
+const schema = await workos.auditLogs.createSchema(
+  {
+    action: 'document.shared',
+    targets: [
+      {
+        type: 'document',
+        metadata: {
+          file_size: { type: 'number' },
+          encrypted: { type: 'boolean' }
+        }
+      },
+      {
+        type: 'user'
+      }
+    ],
+    actor: {
+      metadata: {
+        department: { type: 'string' }
+      }
+    },
+    metadata: {
+      share_type: { type: 'string' },
+      expiration_days: { type: 'number' }
+    }
+  },
+  {
+    idempotencyKey: 'schema-creation-key-123'
+  }
+);
+```
+
+### Parameters
+
+<ParamField path="schema" type="object" required>
+  <ParamField path="action" type="string" required>
+    The action name this schema applies to.
+  </ParamField>
+  
+  <ParamField path="targets" type="array" required>
+    Schema definitions for target resources.
+    
+    <Expandable title="target schema properties">
+      <ParamField path="type" type="string" required>
+        The type of target resource.
+      </ParamField>
+      
+      <ParamField path="metadata" type="object">
+        Schema for target metadata fields. Each key should have a `type` property with value `string`, `number`, or `boolean`.
+      </ParamField>
+    </Expandable>
+  </ParamField>
+  
+  <ParamField path="actor" type="object">
+    Schema definition for the actor.
+    
+    <Expandable title="actor schema properties">
+      <ParamField path="metadata" type="object">
+        Schema for actor metadata fields.
+      </ParamField>
+    </Expandable>
+  </ParamField>
+  
+  <ParamField path="metadata" type="object">
+    Schema for event-level metadata fields.
+  </ParamField>
+</ParamField>
+
+<ParamField path="options" type="object">
+  Request options.
+  
+  <Expandable title="options properties">
+    <ParamField path="idempotencyKey" type="string">
+      Unique key to prevent duplicate schema creation.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Response
+
+<ResponseField name="object" type="string">
+  Always `audit_log_schema`.
+</ResponseField>
+
+<ResponseField name="version" type="number">
+  Version number of the schema.
+</ResponseField>
+
+<ResponseField name="targets" type="array">
+  Array of target schema definitions.
+</ResponseField>
+
+<ResponseField name="actor" type="object">
+  Actor schema definition.
+</ResponseField>
+
+<ResponseField name="metadata" type="object">
+  Event-level metadata schema definition.
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 timestamp when the schema was created.
+</ResponseField>

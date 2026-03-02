@@ -1,0 +1,484 @@
+---
+title: PKCE flow
+description: PKCE authentication flow for public clients
+---
+
+PKCE (Proof Key for Code Exchange) is an OAuth 2.0 security extension that enables public clients to securely authenticate without a client secret. This guide explains how to implement PKCE authentication using the WorkOS Node.js SDK.
+
+## What is PKCE?
+
+PKCE implements [RFC 7636](https://tools.ietf.org/html/rfc7636) for secure authorization code exchange without a client secret. It's essential for:
+
+- **Electron apps** - Desktop applications
+- **React Native/mobile apps** - iOS and Android applications  
+- **CLI tools** - Command-line interfaces
+- **Single-page applications** - Browser-based apps
+- **Any public client** - Applications that cannot securely store secrets
+
+From [pkce.ts:7](/home/daytona/workspace/source/src/pkce/pkce.ts:7):
+
+```typescript
+/**
+ * PKCE (Proof Key for Code Exchange) utilities for OAuth 2.0 public clients.
+ *
+ * Implements RFC 7636 for secure authorization code exchange without a client secret.
+ * Used by Electron apps, React Native/mobile apps, CLI tools, and other public clients.
+ */
+export class PKCE { ... }
+```
+
+## PKCE components
+
+A PKCE flow involves three components:
+
+### Code verifier
+
+A cryptographically random string between 43-128 characters:
+
+```typescript
+const workos = new WorkOS({ clientId: 'client_...' });
+const verifier = workos.pkce.generateCodeVerifier(43); // Default length
+```
+
+From [pkce.ts:20](/home/daytona/workspace/source/src/pkce/pkce.ts:20):
+
+```typescript
+/**
+ * Generate a cryptographically random code verifier.
+ *
+ * @param length - Length of verifier (43-128, default 43)
+ * @returns RFC 7636 compliant code verifier
+ */
+generateCodeVerifier(length: number = 43): string {
+  if (length < 43 || length > 128) {
+    throw new RangeError(
+      `Code verifier length must be between 43 and 128, got ${length}`,
+    );
+  }
+
+  const byteLength = Math.ceil((length * 3) / 4);
+  const randomBytes = new Uint8Array(byteLength);
+  crypto.getRandomValues(randomBytes);
+
+  return this.base64UrlEncode(randomBytes).slice(0, length);
+}
+```
+
+### Code challenge
+
+A Base64URL-encoded SHA256 hash of the code verifier:
+
+```typescript
+const challenge = await workos.pkce.generateCodeChallenge(verifier);
+```
+
+From [pkce.ts:34](/home/daytona/workspace/source/src/pkce/pkce.ts:34):
+
+```typescript
+/**
+ * Generate S256 code challenge from a verifier.
+ *
+ * @param verifier - The code verifier
+ * @returns Base64URL-encoded SHA256 hash
+ */
+async generateCodeChallenge(verifier: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(verifier);
+  const hash = await crypto.subtle.digest('SHA-256', data);
+  return this.base64UrlEncode(new Uint8Array(hash));
+}
+```
+
+### Code challenge method
+
+Always `'S256'` (SHA256), which is the only method supported by the SDK.
+
+## Generating PKCE parameters
+
+The SDK provides a convenience method to generate all PKCE parameters at once:
+
+```typescript
+const workos = new WorkOS({ clientId: 'client_...' });
+const pkce = await workos.pkce.generate();
+
+console.log(pkce);
+// {
+//   codeVerifier: 'randomly-generated-verifier-string',
+//   codeChallenge: 'base64url-encoded-sha256-hash',
+//   codeChallengeMethod: 'S256'
+// }
+```
+
+From [pkce.ts:47](/home/daytona/workspace/source/src/pkce/pkce.ts:47):
+
+```typescript
+/**
+ * Generate a complete PKCE pair (verifier + challenge).
+ *
+ * @returns Code verifier, challenge, and method ('S256')
+ */
+async generate(): Promise<PKCEPair> {
+  const codeVerifier = this.generateCodeVerifier();
+  const codeChallenge = await this.generateCodeChallenge(codeVerifier);
+  return { codeVerifier, codeChallenge, codeChallengeMethod: 'S256' };
+}
+```
+
+## Complete PKCE flow
+
+### Step 1: Initialize the client
+
+Initialize WorkOS without an API key:
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS({ clientId: 'client_...' });
+```
+
+### Step 2: Generate authorization URL
+
+Use `getAuthorizationUrlWithPKCE()` to automatically generate PKCE parameters:
+
+```typescript
+const { url, state, codeVerifier } = 
+  await workos.userManagement.getAuthorizationUrlWithPKCE({
+    provider: 'authkit',
+    redirectUri: 'myapp://callback',
+    clientId: 'client_...',
+  });
+
+console.log('Authorization URL:', url);
+console.log('State:', state);
+console.log('Code Verifier:', codeVerifier);
+```
+
+From [user-management.ts:1179](/home/daytona/workspace/source/src/user-management/user-management.ts:1179):
+
+```typescript
+/**
+ * Generate an OAuth 2.0 authorization URL with automatic PKCE.
+ *
+ * This method generates PKCE parameters internally and returns them along with
+ * the authorization URL. Use this for public clients (CLI apps, Electron, mobile)
+ * that cannot securely store a client secret.
+ *
+ * @returns Object containing url, state, and codeVerifier
+ */
+async getAuthorizationUrlWithPKCE(
+  options: Omit<
+    UserManagementAuthorizationURLOptions,
+    'codeChallenge' | 'codeChallengeMethod' | 'state'
+  >,
+): Promise<PKCEAuthorizationURLResult> {
+  // ... implementation
+  
+  // Generate PKCE parameters
+  const pkce = await this.workos.pkce.generate();
+  
+  // Generate secure random state
+  const state = this.workos.pkce.generateCodeVerifier(43);
+  
+  // ... build URL with pkce.codeChallenge
+  
+  return { url, state, codeVerifier: pkce.codeVerifier };
+}
+```
+
+### Step 3: Store parameters securely
+
+<Warning>
+**Critical**: Store `codeVerifier` and `state` securely on-device. These values must survive app restarts during the authentication flow.
+</Warning>
+
+For different platforms:
+
+<CodeGroup>
+```typescript iOS (Swift)
+// Use iOS Keychain
+import Security
+
+// Store code verifier
+let keychain = Keychain(service: "com.myapp.auth")
+keychain["code_verifier"] = codeVerifier
+```
+
+```kotlin Android (Kotlin)
+// Use Android Keystore
+import androidx.security.crypto.EncryptedSharedPreferences
+
+val prefs = EncryptedSharedPreferences.create(
+  "auth_prefs",
+  MasterKeys.getOrCreate(MasterKeys.AES256_GCM_SPEC),
+  context,
+  EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+  EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+)
+prefs.edit().putString("code_verifier", codeVerifier).apply()
+```
+
+```typescript Electron
+// Use electron-store with encryption
+import Store from 'electron-store';
+
+const store = new Store({
+  encryptionKey: 'your-encryption-key',
+});
+
+store.set('auth.codeVerifier', codeVerifier);
+store.set('auth.state', state);
+```
+
+```typescript CLI
+// Use OS keychain via keytar
+import * as keytar from 'keytar';
+
+await keytar.setPassword('myapp', 'code_verifier', codeVerifier);
+await keytar.setPassword('myapp', 'state', state);
+```
+</CodeGroup>
+
+### Step 4: Redirect to authorization URL
+
+Open the authorization URL in the user's browser:
+
+```typescript
+// For web apps
+window.location.href = url;
+
+// For Electron apps
+const { shell } = require('electron');
+shell.openExternal(url);
+
+// For CLI apps
+import open from 'open';
+open(url);
+```
+
+### Step 5: Handle callback
+
+Capture the authorization code from the callback URL:
+
+```typescript
+// Example callback URL: myapp://callback?code=AUTH_CODE&state=STATE_VALUE
+
+const urlParams = new URLSearchParams(callbackUrl.split('?')[1]);
+const code = urlParams.get('code');
+const returnedState = urlParams.get('state');
+
+// Verify state matches
+if (returnedState !== storedState) {
+  throw new Error('State mismatch - possible CSRF attack');
+}
+```
+
+### Step 6: Exchange code for tokens
+
+Retrieve the stored `codeVerifier` and exchange the authorization code:
+
+```typescript
+const { accessToken, refreshToken } = 
+  await workos.userManagement.authenticateWithCode({
+    code: code,
+    codeVerifier: storedCodeVerifier,
+    clientId: 'client_...',
+  });
+
+// Store tokens securely
+// Clear code verifier (one-time use)
+```
+
+From [user-management.ts:331](/home/daytona/workspace/source/src/user-management/user-management.ts:331):
+
+```typescript
+/**
+ * Exchange an authorization code for tokens.
+ *
+ * Auto-detects public vs confidential client mode:
+ * - If codeVerifier is provided: Uses PKCE flow (public client)
+ * - If no codeVerifier: Uses client_secret from API key (confidential client)
+ * - If both: Uses both client_secret AND codeVerifier (confidential client with PKCE)
+ */
+async authenticateWithCode(
+  payload: AuthenticateWithCodeOptions,
+): Promise<AuthenticationResponse> {
+  // ... implementation validates codeVerifier and exchanges code
+}
+```
+
+## Manual PKCE implementation
+
+For advanced use cases, you can manually generate PKCE parameters:
+
+```typescript
+const workos = new WorkOS({ clientId: 'client_...' });
+
+// Step 1: Generate PKCE parameters manually
+const pkce = await workos.pkce.generate();
+
+// Step 2: Build authorization URL with PKCE
+const url = workos.userManagement.getAuthorizationUrl({
+  provider: 'authkit',
+  redirectUri: 'myapp://callback',
+  clientId: 'client_...',
+  codeChallenge: pkce.codeChallenge,
+  codeChallengeMethod: pkce.codeChallengeMethod,
+  state: 'your-custom-state',
+});
+
+// Step 3: Store pkce.codeVerifier securely
+// Step 4: Redirect user to url
+// Step 5: Exchange code with codeVerifier
+```
+
+## PKCE with confidential clients
+
+Server-side applications can also use PKCE alongside the client secret for defense in depth (recommended by OAuth 2.1):
+
+```typescript
+// Initialize with API key
+const workos = new WorkOS('sk_...');
+
+// Generate authorization URL with PKCE
+const { url, codeVerifier } =
+  await workos.userManagement.getAuthorizationUrlWithPKCE({
+    provider: 'authkit',
+    redirectUri: 'https://example.com/callback',
+    clientId: 'client_...',
+  });
+
+// Both client_secret AND code_verifier will be sent
+const { accessToken } = await workos.userManagement.authenticateWithCode({
+  code: authorizationCode,
+  codeVerifier,
+  clientId: 'client_...',
+});
+```
+
+## Error handling
+
+Common PKCE errors and how to handle them:
+
+### Empty code verifier
+
+```typescript
+try {
+  await workos.userManagement.authenticateWithCode({
+    code: 'auth_code',
+    codeVerifier: '', // Empty string
+    clientId: 'client_...',
+  });
+} catch (error) {
+  console.error(error.message);
+  // "codeVerifier cannot be an empty string.
+  // Generate a valid PKCE pair using workos.pkce.generate()."
+}
+```
+
+### Invalid verifier length
+
+```typescript
+try {
+  workos.pkce.generateCodeVerifier(30); // Too short
+} catch (error) {
+  console.error(error.message);
+  // "Code verifier length must be between 43 and 128, got 30"
+}
+```
+
+### Missing credentials
+
+```typescript
+try {
+  const workos = new WorkOS({ clientId: 'client_...' });
+  await workos.userManagement.authenticateWithCode({
+    code: 'auth_code',
+    // Missing codeVerifier AND no API key
+    clientId: 'client_...',
+  });
+} catch (error) {
+  console.error(error.message);
+  // "authenticateWithCode requires either a codeVerifier (for public clients)
+  // or an API key (for confidential clients)"
+}
+```
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Secure storage" icon="vault">
+    Always store code verifiers in platform-specific secure storage (Keychain, Keystore, etc.).
+  </Card>
+  <Card title="Validate state" icon="shield-check">
+    Always validate the state parameter to prevent CSRF attacks.
+  </Card>
+  <Card title="One-time use" icon="circle-1">
+    Clear the code verifier after successful token exchange. It's single-use only.
+  </Card>
+  <Card title="Use getAuthorizationUrlWithPKCE" icon="wand-magic-sparkles">
+    Use the convenience method instead of manually generating PKCE parameters.
+  </Card>
+</CardGroup>
+
+## Complete example
+
+Here's a complete PKCE flow implementation:
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS({ clientId: 'client_...' });
+
+// Step 1: Generate authorization URL
+const { url, state, codeVerifier } = 
+  await workos.userManagement.getAuthorizationUrlWithPKCE({
+    provider: 'authkit',
+    redirectUri: 'myapp://callback',
+    clientId: 'client_...',
+  });
+
+// Step 2: Store parameters securely
+await secureStorage.set('code_verifier', codeVerifier);
+await secureStorage.set('state', state);
+
+// Step 3: Open authorization URL
+await openBrowser(url);
+
+// Step 4: Handle callback (this happens later)
+const handleCallback = async (callbackUrl: string) => {
+  const urlParams = new URLSearchParams(callbackUrl.split('?')[1]);
+  const code = urlParams.get('code');
+  const returnedState = urlParams.get('state');
+
+  // Verify state
+  const storedState = await secureStorage.get('state');
+  if (returnedState !== storedState) {
+    throw new Error('State mismatch');
+  }
+
+  // Exchange code for tokens
+  const storedCodeVerifier = await secureStorage.get('code_verifier');
+  const { accessToken, refreshToken, user } = 
+    await workos.userManagement.authenticateWithCode({
+      code,
+      codeVerifier: storedCodeVerifier,
+      clientId: 'client_...',
+    });
+
+  // Store tokens and clear one-time values
+  await secureStorage.set('access_token', accessToken);
+  await secureStorage.set('refresh_token', refreshToken);
+  await secureStorage.delete('code_verifier');
+  await secureStorage.delete('state');
+
+  return { user, accessToken };
+};
+```
+
+## Related resources
+
+- [Authentication](/concepts/authentication)
+- [Client initialization](/concepts/client-initialization)
+- [Error handling](/concepts/error-handling)
+- [RFC 7636 - PKCE Specification](https://tools.ietf.org/html/rfc7636)
+- [OAuth 2.1 Security Best Practices](https://oauth.net/2.1/)

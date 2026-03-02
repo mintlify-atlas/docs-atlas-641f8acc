@@ -1,0 +1,356 @@
+---
+title: Directory Sync API
+description: Sync users and groups from identity providers
+---
+
+The Directory Sync API allows you to retrieve and manage directories, users, and groups synced from identity providers like Okta, Azure AD, and Google Workspace.
+
+## Initialize
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_example_123456789');
+```
+
+## Methods
+
+### listDirectories
+
+Retrieve a list of directories.
+
+```typescript
+const directories = await workos.directorySync.listDirectories({
+  organizationId: 'org_123',
+  limit: 10,
+});
+
+for await (const directory of directories) {
+  console.log(directory.id, directory.name, directory.type);
+}
+```
+
+<ParamField path="options" type="ListDirectoriesOptions" optional>
+  Options for filtering and paginating directories.
+
+  <Expandable title="properties">
+    <ParamField path="organizationId" type="string" optional>
+      Filter directories by organization ID.
+    </ParamField>
+    <ParamField path="before" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+    <ParamField path="after" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+    <ParamField path="limit" type="number" optional>
+      Maximum number of records to return.
+    </ParamField>
+    <ParamField path="order" type="'asc' | 'desc'" optional>
+      Sort order for results.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="directories" type="AutoPaginatable<Directory>">
+  An auto-paginatable list of directories.
+
+  <Expandable title="Directory properties">
+    <ResponseField name="object" type="'directory'">
+      Object type identifier.
+    </ResponseField>
+    <ResponseField name="id" type="string">
+      Unique identifier for the directory.
+    </ResponseField>
+    <ResponseField name="name" type="string">
+      Name of the directory.
+    </ResponseField>
+    <ResponseField name="domain" type="string">
+      Domain associated with the directory.
+    </ResponseField>
+    <ResponseField name="externalKey" type="string">
+      External key from the identity provider.
+    </ResponseField>
+    <ResponseField name="organizationId" type="string" optional>
+      ID of the linked organization.
+    </ResponseField>
+    <ResponseField name="state" type="DirectoryState">
+      Current state: `active`, `inactive`, `deleting`, `invalid_credentials`, or `validating`.
+    </ResponseField>
+    <ResponseField name="type" type="DirectoryType">
+      Identity provider type (e.g., `okta scim v2.0`, `azure scim v2.0`).
+    </ResponseField>
+    <ResponseField name="createdAt" type="string">
+      ISO-8601 timestamp of creation.
+    </ResponseField>
+    <ResponseField name="updatedAt" type="string">
+      ISO-8601 timestamp of last update.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+### getDirectory
+
+Retrieve a directory by ID.
+
+```typescript
+const directory = await workos.directorySync.getDirectory('directory_123');
+
+console.log(directory.name, directory.type);
+```
+
+<ParamField path="id" type="string" required>
+  The unique identifier of the directory.
+</ParamField>
+
+<ResponseField name="directory" type="Directory">
+  The directory object.
+</ResponseField>
+
+---
+
+### deleteDirectory
+
+Delete a directory.
+
+```typescript
+await workos.directorySync.deleteDirectory('directory_123');
+```
+
+<ParamField path="id" type="string" required>
+  The unique identifier of the directory to delete.
+</ParamField>
+
+---
+
+### listGroups
+
+Retrieve groups from a directory.
+
+```typescript
+const groups = await workos.directorySync.listGroups({
+  directory: 'directory_123',
+  limit: 20,
+});
+
+for await (const group of groups) {
+  console.log(group.id, group.name);
+}
+```
+
+<ParamField path="options" type="ListDirectoryGroupsOptions" required>
+  <Expandable title="properties">
+    <ParamField path="directory" type="string" required>
+      The ID of the directory.
+    </ParamField>
+    <ParamField path="before" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+    <ParamField path="after" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+    <ParamField path="limit" type="number" optional>
+      Maximum number of records to return.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="groups" type="AutoPaginatable<DirectoryGroup>">
+  An auto-paginatable list of directory groups.
+
+  <Expandable title="DirectoryGroup properties">
+    <ResponseField name="id" type="string">
+      Unique identifier for the group.
+    </ResponseField>
+    <ResponseField name="idpId" type="string">
+      Group ID from the identity provider.
+    </ResponseField>
+    <ResponseField name="directoryId" type="string">
+      ID of the parent directory.
+    </ResponseField>
+    <ResponseField name="organizationId" type="string | null">
+      ID of the linked organization.
+    </ResponseField>
+    <ResponseField name="name" type="string">
+      Name of the group.
+    </ResponseField>
+    <ResponseField name="rawAttributes" type="any">
+      Raw attributes from the identity provider.
+    </ResponseField>
+    <ResponseField name="createdAt" type="string">
+      ISO-8601 timestamp of creation.
+    </ResponseField>
+    <ResponseField name="updatedAt" type="string">
+      ISO-8601 timestamp of last update.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+### getGroup
+
+Retrieve a group by ID.
+
+```typescript
+const group = await workos.directorySync.getGroup('directory_group_123');
+
+console.log(group.name);
+```
+
+<ParamField path="group" type="string" required>
+  The unique identifier of the group.
+</ParamField>
+
+<ResponseField name="group" type="DirectoryGroup">
+  The directory group object.
+</ResponseField>
+
+---
+
+### listUsers
+
+Retrieve users from a directory.
+
+```typescript
+const users = await workos.directorySync.listUsers({
+  directory: 'directory_123',
+  limit: 20,
+});
+
+for await (const user of users) {
+  console.log(user.id, user.email, user.firstName, user.lastName);
+}
+```
+
+<ParamField path="options" type="ListDirectoryUsersOptions" required>
+  <Expandable title="properties">
+    <ParamField path="directory" type="string" required>
+      The ID of the directory.
+    </ParamField>
+    <ParamField path="group" type="string" optional>
+      Filter users by group ID.
+    </ParamField>
+    <ParamField path="before" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+    <ParamField path="after" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+    <ParamField path="limit" type="number" optional>
+      Maximum number of records to return.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="users" type="AutoPaginatable<DirectoryUserWithGroups>">
+  An auto-paginatable list of directory users with their groups.
+
+  <Expandable title="DirectoryUserWithGroups properties">
+    <ResponseField name="object" type="'directory_user'">
+      Object type identifier.
+    </ResponseField>
+    <ResponseField name="id" type="string">
+      Unique identifier for the user.
+    </ResponseField>
+    <ResponseField name="directoryId" type="string">
+      ID of the parent directory.
+    </ResponseField>
+    <ResponseField name="organizationId" type="string | null">
+      ID of the linked organization.
+    </ResponseField>
+    <ResponseField name="idpId" type="string">
+      User ID from the identity provider.
+    </ResponseField>
+    <ResponseField name="email" type="string | null">
+      User's email address.
+    </ResponseField>
+    <ResponseField name="firstName" type="string | null">
+      User's first name.
+    </ResponseField>
+    <ResponseField name="lastName" type="string | null">
+      User's last name.
+    </ResponseField>
+    <ResponseField name="state" type="'active' | 'inactive'">
+      User's state in the directory.
+    </ResponseField>
+    <ResponseField name="customAttributes" type="object">
+      Custom attributes from the identity provider.
+    </ResponseField>
+    <ResponseField name="rawAttributes" type="any">
+      Raw attributes from the identity provider.
+    </ResponseField>
+    <ResponseField name="groups" type="DirectoryGroup[]">
+      Groups the user belongs to.
+    </ResponseField>
+    <ResponseField name="createdAt" type="string">
+      ISO-8601 timestamp of creation.
+    </ResponseField>
+    <ResponseField name="updatedAt" type="string">
+      ISO-8601 timestamp of last update.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+### getUser
+
+Retrieve a user by ID.
+
+```typescript
+const user = await workos.directorySync.getUser('directory_user_123');
+
+console.log(user.email, user.groups);
+```
+
+<ParamField path="user" type="string" required>
+  The unique identifier of the user.
+</ParamField>
+
+<ResponseField name="user" type="DirectoryUserWithGroups">
+  The directory user object with groups.
+</ResponseField>
+
+## Custom Attributes
+
+The `listUsers` and `getUser` methods support TypeScript generics for custom attributes:
+
+```typescript
+interface CustomAttributes {
+  department: string;
+  employeeId: string;
+}
+
+const users = await workos.directorySync.listUsers<CustomAttributes>({
+  directory: 'directory_123',
+});
+
+for await (const user of users) {
+  console.log(user.customAttributes.department);
+  console.log(user.customAttributes.employeeId);
+}
+```
+
+## Supported Directory Types
+
+The following identity providers are supported:
+
+- `azure scim v2.0`
+- `okta scim v2.0`
+- `onelogin scim v2.0`
+- `jump cloud scim v2.0`
+- `gsuite directory`
+- `generic scim v2.0`
+- `rippling scim v2.0`
+- `bamboohr`
+- `breathe hr`
+- `cezanne hr`
+- `fourth hr`
+- `hibob`
+- `people hr`
+- `personio`
+- `workday`
+- And more...

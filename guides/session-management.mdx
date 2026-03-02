@@ -1,0 +1,587 @@
+---
+title: "Session Management"
+description: "Advanced session handling, refresh strategies, and sealed session patterns with the WorkOS Node SDK"
+---
+
+The WorkOS Node SDK provides comprehensive session management capabilities for server-side applications, including sealed sessions, automatic refresh, and JWT validation.
+
+## Session Types
+
+WorkOS supports two session management patterns:
+
+1. **Stateless Sessions**: Sealed (encrypted) session cookies
+2. **Server-Side Sessions**: Track active sessions via API
+
+## Sealed Sessions
+
+Sealed sessions encrypt user data in a cookie, enabling stateless authentication without database lookups.
+
+### Initialization
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_...');
+
+// Generate a secure cookie password (32+ characters)
+const COOKIE_PASSWORD = process.env.WORKOS_COOKIE_PASSWORD;
+if (!COOKIE_PASSWORD || COOKIE_PASSWORD.length < 32) {
+  throw new Error('COOKIE_PASSWORD must be at least 32 characters');
+}
+```
+
+<Warning>
+**Cookie Password Security**: Generate a cryptographically random password and store it securely. Rotating this password invalidates all existing sessions.
+</Warning>
+
+### Creating Sealed Sessions
+
+Enable session sealing during authentication:
+
+```typescript
+const { sealedSession, user, accessToken, refreshToken } = 
+  await workos.userManagement.authenticateWithCode({
+    code: authorizationCode,
+    session: {
+      sealSession: true,
+      cookiePassword: COOKIE_PASSWORD,
+    },
+  });
+
+// Store in HTTP-only cookie
+res.cookie('wos-session', sealedSession, {
+  httpOnly: true,
+  secure: true,
+  sameSite: 'lax',
+  maxAge: 1000 * 60 * 60 * 24 * 7, // 7 days
+});
+```
+
+Sealed sessions work with all authentication methods:
+
+```typescript
+// Password authentication
+const { sealedSession } = await workos.userManagement.authenticateWithPassword({
+  email,
+  password,
+  session: { sealSession: true, cookiePassword: COOKIE_PASSWORD },
+});
+
+// Magic auth
+const { sealedSession } = await workos.userManagement.authenticateWithMagicAuth({
+  code: magicAuthCode,
+  email,
+  session: { sealSession: true, cookiePassword: COOKIE_PASSWORD },
+});
+
+// Refresh token
+const { sealedSession } = await workos.userManagement.authenticateWithRefreshToken({
+  refreshToken,
+  session: { sealSession: true, cookiePassword: COOKIE_PASSWORD },
+});
+```
+
+### What's Inside a Sealed Session?
+
+Sealed sessions contain:
+
+```typescript
+interface SessionCookieData {
+  organizationId?: string;
+  user: User;
+  accessToken: string;
+  refreshToken?: string;
+  authenticationMethod: string;
+  impersonator?: Impersonator;
+}
+```
+
+This data is encrypted using iron (same library used by Next.js) with AES-256-CBC and HMAC-SHA256.
+
+## Loading and Authenticating Sessions
+
+### Basic Authentication
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_...');
+
+async function authenticateRequest(req: Request) {
+  const sessionData = req.cookies['wos-session'];
+  if (!sessionData) {
+    return { authenticated: false, reason: 'NO_SESSION_COOKIE_PROVIDED' };
+  }
+
+  const session = workos.userManagement.loadSealedSession({
+    sessionData,
+    cookiePassword: COOKIE_PASSWORD,
+  });
+
+  return await session.authenticate();
+}
+```
+
+### Handling Authentication Results
+
+The `authenticate()` method returns a discriminated union:
+
+```typescript
+const result = await session.authenticate();
+
+if (!result.authenticated) {
+  // Handle failure
+  switch (result.reason) {
+    case 'NO_SESSION_COOKIE_PROVIDED':
+      return res.redirect('/login');
+    case 'INVALID_SESSION_COOKIE':
+      // Cookie tampered or expired
+      res.clearCookie('wos-session');
+      return res.redirect('/login');
+    case 'INVALID_JWT':
+      // Access token expired - attempt refresh
+      return await refreshSession(session);
+  }
+}
+
+// Success - access user data
+const { user, sessionId, organizationId, role, permissions } = result;
+req.user = user;
+req.organizationId = organizationId;
+```
+
+### Session Middleware (Express)
+
+```typescript
+import { Request, Response, NextFunction } from 'express';
+
+function requireAuth() {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const sessionData = req.cookies['wos-session'];
+    if (!sessionData) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const session = workos.userManagement.loadSealedSession({
+      sessionData,
+      cookiePassword: COOKIE_PASSWORD,
+    });
+
+    const result = await session.authenticate();
+
+    if (!result.authenticated) {
+      if (result.reason === 'INVALID_JWT') {
+        // Try to refresh
+        const refreshed = await session.refresh();
+        if (refreshed.authenticated) {
+          // Update cookie with new session
+          res.cookie('wos-session', refreshed.sealedSession, {
+            httpOnly: true,
+            secure: true,
+            sameSite: 'lax',
+            maxAge: 1000 * 60 * 60 * 24 * 7,
+          });
+          req.user = refreshed.user;
+          req.organizationId = refreshed.organizationId;
+          return next();
+        }
+      }
+      
+      res.clearCookie('wos-session');
+      return res.status(401).json({ error: 'Session invalid' });
+    }
+
+    req.user = result.user;
+    req.organizationId = result.organizationId;
+    req.permissions = result.permissions;
+    next();
+  };
+}
+
+// Usage
+app.get('/api/dashboard', requireAuth(), (req, res) => {
+  res.json({ user: req.user });
+});
+```
+
+## Session Refresh
+
+Sessions expire when the access token expires (typically 10 minutes). Use `refresh()` to get a new access token:
+
+```typescript
+const refreshed = await session.refresh();
+
+if (!refreshed.authenticated) {
+  // Refresh failed - user must re-authenticate
+  switch (refreshed.reason) {
+    case 'INVALID_SESSION_COOKIE':
+      // No refresh token in session
+      return res.redirect('/login');
+    case 'invalid_grant':
+      // Refresh token expired or revoked
+      res.clearCookie('wos-session');
+      return res.redirect('/login');
+    case 'mfa_enrollment':
+      // User must enroll in MFA
+      return res.redirect('/enroll-mfa');
+    case 'sso_required':
+      // SSO policy requires re-authentication
+      return res.redirect('/login?sso_required=true');
+  }
+}
+
+// Update cookie with new sealed session
+res.cookie('wos-session', refreshed.sealedSession, {
+  httpOnly: true,
+  secure: true,
+  sameSite: 'lax',
+  maxAge: 1000 * 60 * 60 * 24 * 7,
+});
+```
+
+### Automatic Refresh Strategy
+
+Implement proactive refresh before token expiration:
+
+```typescript
+import { jwtDecode } from 'jwt-decode';
+
+async function getSessionWithAutoRefresh(session: CookieSession) {
+  const result = await session.authenticate();
+  
+  if (!result.authenticated) {
+    if (result.reason === 'INVALID_JWT') {
+      // Token expired, refresh
+      return await session.refresh();
+    }
+    return result;
+  }
+
+  // Check if token expires soon (within 5 minutes)
+  const decoded = jwtDecode(result.accessToken);
+  const expiresAt = decoded.exp! * 1000;
+  const fiveMinutes = 5 * 60 * 1000;
+  
+  if (Date.now() >= expiresAt - fiveMinutes) {
+    // Proactively refresh
+    return await session.refresh();
+  }
+
+  return result;
+}
+```
+
+### Organization Switching
+
+Refresh to a different organization context:
+
+```typescript
+const refreshed = await session.refresh({
+  organizationId: 'org_456',
+});
+
+if (refreshed.authenticated) {
+  // User now authenticated to org_456
+  res.cookie('wos-session', refreshed.sealedSession, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax',
+  });
+}
+```
+
+### Cookie Password Rotation
+
+Rotate encryption keys without invalidating sessions:
+
+```typescript
+const NEW_COOKIE_PASSWORD = process.env.NEW_COOKIE_PASSWORD;
+
+const refreshed = await session.refresh({
+  cookiePassword: NEW_COOKIE_PASSWORD,
+});
+
+if (refreshed.authenticated) {
+  // Session re-encrypted with new password
+  res.cookie('wos-session', refreshed.sealedSession, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax',
+  });
+}
+```
+
+## Logout
+
+Properly log out users by revoking the session and clearing cookies:
+
+```typescript
+async function logout(req: Request, res: Response) {
+  const sessionData = req.cookies['wos-session'];
+  
+  if (sessionData) {
+    const session = workos.userManagement.loadSealedSession({
+      sessionData,
+      cookiePassword: COOKIE_PASSWORD,
+    });
+
+    try {
+      // Get logout URL (redirects user through WorkOS)
+      const logoutUrl = await session.getLogoutUrl({
+        returnTo: 'https://example.com',
+      });
+      
+      res.clearCookie('wos-session');
+      return res.redirect(logoutUrl);
+    } catch (error) {
+      // Session invalid, just clear cookie
+      res.clearCookie('wos-session');
+      return res.redirect('/');
+    }
+  }
+
+  res.redirect('/');
+}
+```
+
+## Server-Side Session Management
+
+Track and manage active user sessions:
+
+### List User Sessions
+
+```typescript
+const sessions = await workos.userManagement.listSessions(userId);
+
+for await (const session of sessions) {
+  console.log({
+    id: session.id,
+    createdAt: session.createdAt,
+    ipAddress: session.ipAddress,
+    userAgent: session.userAgent,
+  });
+}
+```
+
+### Revoke Sessions
+
+Revoke specific sessions or all sessions except current:
+
+```typescript
+// Revoke specific session
+await workos.userManagement.revokeSession({
+  sessionId: 'session_123',
+});
+
+// Revoke all sessions except current
+await workos.userManagement.revokeSession({
+  sessionId: currentSessionId,
+  revokeAllSessions: true,
+});
+```
+
+### Session Activity Dashboard
+
+```typescript
+async function getSessionActivity(userId: string) {
+  const sessions = await workos.userManagement.listSessions(userId, {
+    limit: 10,
+    order: 'desc',
+  });
+
+  const activeSessions = [];
+  for await (const session of sessions) {
+    activeSessions.push({
+      id: session.id,
+      ipAddress: session.ipAddress,
+      userAgent: session.userAgent,
+      createdAt: session.createdAt,
+      current: session.id === currentSessionId,
+    });
+  }
+
+  return activeSessions;
+}
+```
+
+## Advanced Patterns
+
+### Multi-Tenant Session Context
+
+Include organization ID in session for tenant isolation:
+
+```typescript
+function requireOrganization(organizationId: string) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const result = await authenticateSession(req);
+    
+    if (!result.authenticated) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    if (result.organizationId !== organizationId) {
+      return res.status(403).json({ 
+        error: 'Not authorized for this organization',
+      });
+    }
+
+    req.user = result.user;
+    req.organizationId = result.organizationId;
+    next();
+  };
+}
+
+app.get(
+  '/api/orgs/:orgId/data',
+  requireOrganization('org_123'),
+  (req, res) => {
+    // User verified to belong to org_123
+    res.json({ data: 'sensitive' });
+  }
+);
+```
+
+### Role-Based Access Control
+
+```typescript
+function requireRole(...allowedRoles: string[]) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const result = await authenticateSession(req);
+    
+    if (!result.authenticated) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    if (!result.role || !allowedRoles.includes(result.role)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    req.user = result.user;
+    req.role = result.role;
+    next();
+  };
+}
+
+app.delete('/api/users/:id', requireRole('admin', 'owner'), (req, res) => {
+  // Only admins and owners can access
+});
+```
+
+### Permission Checks
+
+```typescript
+function requirePermission(permission: string) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const result = await authenticateSession(req);
+    
+    if (!result.authenticated) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    if (!result.permissions?.includes(permission)) {
+      return res.status(403).json({ 
+        error: `Missing permission: ${permission}`,
+      });
+    }
+
+    req.user = result.user;
+    req.permissions = result.permissions;
+    next();
+  };
+}
+
+app.post(
+  '/api/data/export',
+  requirePermission('data:export'),
+  (req, res) => {
+    // User has data:export permission
+  }
+);
+```
+
+## Security Best Practices
+
+<Steps>
+  <Step title="Use HTTP-Only Cookies">
+    Always set `httpOnly: true` to prevent XSS attacks from accessing the session cookie.
+  </Step>
+  
+  <Step title="Enable Secure Flag in Production">
+    Set `secure: true` to ensure cookies are only sent over HTTPS:
+    ```typescript
+    res.cookie('wos-session', sealedSession, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+    });
+    ```
+  </Step>
+  
+  <Step title="Configure SameSite">
+    Use `sameSite: 'lax'` for most apps, or `strict` for additional CSRF protection.
+  </Step>
+  
+  <Step title="Set Appropriate Max-Age">
+    Balance security and UX:
+    - Short-lived sessions (30 min - 1 hour): High security apps
+    - Medium-lived sessions (1-7 days): Most applications
+    - Long-lived sessions (30+ days): Consumer apps
+  </Step>
+  
+  <Step title="Clear Cookies on Logout">
+    Always clear session cookies and revoke server-side sessions.
+  </Step>
+  
+  <Step title="Implement Session Timeout">
+    Track last activity and force re-authentication after inactivity:
+    ```typescript
+    const INACTIVITY_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+    
+    if (Date.now() - lastActivity > INACTIVITY_TIMEOUT) {
+      res.clearCookie('wos-session');
+      return res.redirect('/login?timeout=true');
+    }
+    ```
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Error: Cookie password is required">
+    Ensure you're providing a `cookiePassword` when sealing sessions:
+    ```typescript
+    session: { sealSession: true, cookiePassword: COOKIE_PASSWORD }
+    ```
+  </Accordion>
+  
+  <Accordion title="Error: Session sealing requires server-side usage">
+    Public clients (no API key) cannot seal sessions. Use public client mode with token storage instead.
+  </Accordion>
+  
+  <Accordion title="Sessions expire immediately">
+    Check cookie `maxAge` and ensure it's set in milliseconds (not seconds):
+    ```typescript
+    maxAge: 1000 * 60 * 60 * 24 * 7 // 7 days in milliseconds
+    ```
+  </Accordion>
+  
+  <Accordion title="INVALID_SESSION_COOKIE after refresh">
+    The sealed session doesn't contain a refresh token. Ensure the initial authentication included one:
+    ```typescript
+    // Refresh tokens are included by default in most flows
+    const { sealedSession, refreshToken } = await workos.userManagement.authenticateWithCode({
+      code,
+      session: { sealSession: true, cookiePassword: COOKIE_PASSWORD },
+    });
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## API Reference
+
+See the source code for implementation details:
+- `CookieSession` class - src/user-management/session.ts:21
+- `authenticate()` - src/user-management/session.ts:45
+- `refresh()` - src/user-management/session.ts:114
+- `getLogoutUrl()` - src/user-management/session.ts:204

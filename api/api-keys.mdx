@@ -1,0 +1,251 @@
+---
+title: 'API Keys'
+description: 'Validate and manage API keys for your WorkOS applications'
+---
+
+## Overview
+
+The API Keys API allows you to programmatically manage and validate API keys used by your organization. This is useful for building internal tools, implementing security workflows, or managing API key lifecycles.
+
+## Methods
+
+### validateApiKey
+
+Validates an API key and retrieves its details.
+
+<ParamField path="payload" type="ValidateApiKeyOptions" required>
+  Validation options
+  
+  <Expandable title="properties">
+    <ParamField path="value" type="string" required>
+      The API key value to validate
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="ValidateApiKeyResponse" type="object">
+  Validation response
+  
+  <Expandable title="properties">
+    <ResponseField name="apiKey" type="ApiKey | null">
+      The API key object if valid, or `null` if invalid
+      
+      <Expandable title="ApiKey properties">
+        <ResponseField name="id" type="string">
+          Unique identifier for the API key
+        </ResponseField>
+        
+        <ResponseField name="object" type="'api_key'">
+          Object type identifier
+        </ResponseField>
+        
+        <ResponseField name="owner" type="object">
+          The owner of the API key
+          
+          - `type` - Owner type (e.g., 'organization')
+          - `id` - Owner ID
+        </ResponseField>
+        
+        <ResponseField name="name" type="string">
+          Human-readable name for the API key
+        </ResponseField>
+        
+        <ResponseField name="obfuscatedValue" type="string">
+          Partially hidden API key value (e.g., "sk_live_****6789")
+        </ResponseField>
+        
+        <ResponseField name="lastUsedAt" type="string | null">
+          ISO 8601 timestamp of when the key was last used
+        </ResponseField>
+        
+        <ResponseField name="permissions" type="string[]">
+          Array of permission scopes granted to this API key
+        </ResponseField>
+        
+        <ResponseField name="createdAt" type="string">
+          ISO 8601 timestamp of when the key was created
+        </ResponseField>
+        
+        <ResponseField name="updatedAt" type="string">
+          ISO 8601 timestamp of when the key was last updated
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+#### Example - Valid Key
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_example_123456789');
+
+const result = await workos.apiKeys.validateApiKey({
+  value: 'sk_live_1234567890abcdef',
+});
+
+if (result.apiKey) {
+  console.log('Valid API key:', result.apiKey.name);
+  console.log('Permissions:', result.apiKey.permissions);
+  console.log('Last used:', result.apiKey.lastUsedAt);
+} else {
+  console.log('Invalid API key');
+}
+```
+
+#### Response - Valid Key
+
+```json
+{
+  "apiKey": {
+    "id": "api_key_01H8Z9Q2Z3Y4X5W6V7U8T9S0R1",
+    "object": "api_key",
+    "owner": {
+      "type": "organization",
+      "id": "org_01H8Z9Q2Z3Y4X5W6V7U8T9S0R1"
+    },
+    "name": "Production API Key",
+    "obfuscatedValue": "sk_live_****cdef",
+    "lastUsedAt": "2024-03-01T15:30:00Z",
+    "permissions": [
+      "user_management:read",
+      "organizations:write"
+    ],
+    "createdAt": "2024-01-15T10:00:00Z",
+    "updatedAt": "2024-03-01T15:30:00Z"
+  }
+}
+```
+
+#### Response - Invalid Key
+
+```json
+{
+  "apiKey": null
+}
+```
+
+---
+
+### deleteApiKey
+
+Deletes an API key by its ID.
+
+<ParamField path="id" type="string" required>
+  The unique identifier of the API key to delete
+</ParamField>
+
+<ResponseField name="void" type="void">
+  Returns nothing on successful deletion
+</ResponseField>
+
+#### Example
+
+```typescript
+await workos.apiKeys.deleteApiKey('api_key_01H8Z9Q2Z3Y4X5W6V7U8T9S0R1');
+
+console.log('API key deleted successfully');
+```
+
+<Warning>
+  Deleting an API key immediately revokes access. Any applications or services using this key will no longer be able to authenticate.
+</Warning>
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Key Validation" icon="shield-check">
+    Verify API keys before processing requests in your application
+  </Card>
+  
+  <Card title="Key Rotation" icon="rotate">
+    Implement automated key rotation workflows for enhanced security
+  </Card>
+  
+  <Card title="Audit Trail" icon="clipboard-list">
+    Track API key usage and last access times for compliance
+  </Card>
+  
+  <Card title="Access Control" icon="lock">
+    Validate permissions before allowing access to sensitive operations
+  </Card>
+</CardGroup>
+
+## Security Best Practices
+
+<AccordionGroup>
+  <Accordion title="Store Keys Securely" icon="vault">
+    Never commit API keys to version control. Use environment variables or secret management services like AWS Secrets Manager, HashiCorp Vault, or Azure Key Vault.
+  </Accordion>
+  
+  <Accordion title="Rotate Keys Regularly" icon="rotate">
+    Implement a key rotation schedule (e.g., every 90 days) to minimize the impact of potential key compromise.
+  </Accordion>
+  
+  <Accordion title="Use Least Privilege" icon="shield">
+    Create API keys with only the permissions necessary for their intended use case.
+  </Accordion>
+  
+  <Accordion title="Monitor Usage" icon="eye">
+    Track `lastUsedAt` timestamps to identify unused or suspicious API key activity.
+  </Accordion>
+  
+  <Accordion title="Revoke Compromised Keys" icon="ban">
+    Immediately delete API keys that may have been exposed or compromised.
+  </Accordion>
+</AccordionGroup>
+
+## Example - Key Rotation Workflow
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_example_123456789');
+
+async function rotateApiKey(oldKeyValue: string) {
+  // Step 1: Validate the old key
+  const validation = await workos.apiKeys.validateApiKey({
+    value: oldKeyValue,
+  });
+  
+  if (!validation.apiKey) {
+    throw new Error('Invalid API key');
+  }
+  
+  // Step 2: Create new key (via WorkOS Dashboard or API)
+  // Note: Key creation typically happens through the WorkOS Dashboard
+  console.log('Create a new API key in the WorkOS Dashboard');
+  
+  // Step 3: Update your application to use the new key
+  console.log('Update environment variables with new key');
+  
+  // Step 4: Delete the old key
+  await workos.apiKeys.deleteApiKey(validation.apiKey.id);
+  
+  console.log('Old API key deleted successfully');
+}
+
+// Usage
+rotateApiKey('sk_live_old_key_value');
+```
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key" href="/concepts/authentication">
+    Learn about WorkOS authentication concepts
+  </Card>
+  
+  <Card title="Client Initialization" icon="gear" href="/concepts/client-initialization">
+    Initialize the WorkOS client with API keys
+  </Card>
+  
+  <Card title="Organizations" icon="building" href="/api/organizations">
+    Manage organization-scoped API keys
+  </Card>
+  
+  <Card title="Audit Logs" icon="clipboard-list" href="/api/audit-logs">
+    Track API key usage in audit logs
+  </Card>
+</CardGroup>

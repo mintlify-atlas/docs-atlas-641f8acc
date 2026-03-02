@@ -1,0 +1,420 @@
+---
+title: "SSO API"
+description: "Manage Single Sign-On connections and authentication"
+---
+
+The `SSO` class provides methods for managing SSO connections and authenticating users through enterprise identity providers.
+
+## Connection Management
+
+### listConnections
+
+Retrieves a paginated list of SSO connections.
+
+<ParamField body="organizationId" type="string">
+  Filter connections by organization ID
+</ParamField>
+
+<ParamField body="connectionType" type="ConnectionType">
+  Filter by connection type (e.g., 'SAML', 'GoogleOAuth', 'MicrosoftOAuth')
+</ParamField>
+
+<ParamField body="limit" type="number">
+  Number of results to return (default: 10)
+</ParamField>
+
+<ParamField body="before" type="string">
+  Cursor for pagination (previous page)
+</ParamField>
+
+<ParamField body="after" type="string">
+  Cursor for pagination (next page)
+</ParamField>
+
+<ResponseField name="connections" type="AutoPaginatable<Connection>">
+  Paginated list of SSO connections
+</ResponseField>
+
+```typescript
+const connections = await workos.sso.listConnections({
+  organizationId: 'org_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5',
+  limit: 20
+});
+
+for await (const connection of connections) {
+  console.log(connection.name, connection.type);
+}
+```
+
+### getConnection
+
+Retrieves a specific SSO connection by ID.
+
+<ParamField path="id" type="string" required>
+  The unique identifier of the connection
+</ParamField>
+
+<ResponseField name="connection" type="Connection">
+  <ResponseField name="id" type="string">
+    Unique identifier for the connection
+  </ResponseField>
+  <ResponseField name="name" type="string">
+    Connection name
+  </ResponseField>
+  <ResponseField name="organizationId" type="string">
+    Associated organization ID
+  </ResponseField>
+  <ResponseField name="type" type="ConnectionType">
+    Connection type (e.g., 'SAML', 'GoogleOAuth')
+  </ResponseField>
+  <ResponseField name="state" type="'draft' | 'active' | 'inactive' | 'validating'">
+    Current state of the connection
+  </ResponseField>
+  <ResponseField name="domains" type="ConnectionDomain[]">
+    Array of domain objects associated with the connection
+  </ResponseField>
+  <ResponseField name="createdAt" type="string">
+    ISO 8601 timestamp of creation
+  </ResponseField>
+  <ResponseField name="updatedAt" type="string">
+    ISO 8601 timestamp of last update
+  </ResponseField>
+</ResponseField>
+
+```typescript
+const connection = await workos.sso.getConnection('conn_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5');
+console.log(connection.name);
+console.log(connection.state);
+```
+
+### deleteConnection
+
+Deletes an SSO connection.
+
+<ParamField path="id" type="string" required>
+  The ID of the connection to delete
+</ParamField>
+
+```typescript
+await workos.sso.deleteConnection('conn_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5');
+```
+
+## Authentication Methods
+
+### getAuthorizationUrl
+
+Generates an SSO authorization URL for initiating the OAuth flow.
+
+<ParamField body="connection" type="string">
+  SSO connection ID
+</ParamField>
+
+<ParamField body="organization" type="string">
+  Organization ID (alternative to connection)
+</ParamField>
+
+<ParamField body="provider" type="string">
+  OAuth provider (e.g., 'GoogleOAuth', 'MicrosoftOAuth')
+</ParamField>
+
+<ParamField body="clientId" type="string" required>
+  Your WorkOS client ID
+</ParamField>
+
+<ParamField body="redirectUri" type="string" required>
+  URL to redirect after authorization
+</ParamField>
+
+<ParamField body="state" type="string">
+  State parameter for CSRF protection
+</ParamField>
+
+<ParamField body="domainHint" type="string">
+  Domain hint to pre-fill login form
+</ParamField>
+
+<ParamField body="loginHint" type="string">
+  Login hint (email) to pre-fill login form
+</ParamField>
+
+<ParamField body="codeChallenge" type="string">
+  PKCE code challenge for public clients
+</ParamField>
+
+<ParamField body="codeChallengeMethod" type="string">
+  PKCE code challenge method (e.g., 'S256')
+</ParamField>
+
+<ResponseField name="url" type="string">
+  The authorization URL to redirect the user to
+</ResponseField>
+
+```typescript
+const url = workos.sso.getAuthorizationUrl({
+  connection: 'conn_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5',
+  clientId: 'client_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5',
+  redirectUri: 'https://myapp.com/callback',
+  state: 'random_state_string'
+});
+
+// Redirect user to this URL
+window.location.href = url;
+```
+
+### getAuthorizationUrlWithPKCE
+
+Generates an SSO authorization URL with automatic PKCE generation. This method is recommended for public clients (CLI apps, Electron, mobile) that cannot securely store a client secret.
+
+<ParamField body="connection" type="string">
+  SSO connection ID
+</ParamField>
+
+<ParamField body="organization" type="string">
+  Organization ID (alternative to connection)
+</ParamField>
+
+<ParamField body="provider" type="string">
+  OAuth provider
+</ParamField>
+
+<ParamField body="clientId" type="string" required>
+  Your WorkOS client ID
+</ParamField>
+
+<ParamField body="redirectUri" type="string" required>
+  URL to redirect after authorization
+</ParamField>
+
+<ParamField body="domainHint" type="string">
+  Domain hint to pre-fill login form
+</ParamField>
+
+<ParamField body="loginHint" type="string">
+  Login hint (email) to pre-fill login form
+</ParamField>
+
+<ResponseField name="result" type="SSOPKCEAuthorizationURLResult">
+  <ResponseField name="url" type="string">
+    The authorization URL
+  </ResponseField>
+  <ResponseField name="state" type="string">
+    Generated state parameter (store for validation)
+  </ResponseField>
+  <ResponseField name="codeVerifier" type="string">
+    PKCE code verifier (store securely for token exchange)
+  </ResponseField>
+</ResponseField>
+
+```typescript
+const { url, state, codeVerifier } = await workos.sso.getAuthorizationUrlWithPKCE({
+  connection: 'conn_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5',
+  clientId: 'client_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5',
+  redirectUri: 'myapp://callback'
+});
+
+// Store state and codeVerifier securely
+localStorage.setItem('oauth_state', state);
+localStorage.setItem('pkce_verifier', codeVerifier);
+
+// Redirect user
+window.location.href = url;
+```
+
+### getProfileAndToken
+
+Exchanges an authorization code for a user profile and access token.
+
+Auto-detects public vs confidential client mode:
+- If `codeVerifier` is provided: Uses PKCE flow (public client)
+- If no `codeVerifier`: Uses client_secret from API key (confidential client)
+- If both: Uses both for defense in depth (recommended by OAuth 2.1)
+
+<ParamField body="code" type="string" required>
+  Authorization code from the OAuth callback
+</ParamField>
+
+<ParamField body="clientId" type="string" required>
+  Your WorkOS client ID
+</ParamField>
+
+<ParamField body="codeVerifier" type="string">
+  PKCE code verifier (for public clients or PKCE-enhanced confidential clients)
+</ParamField>
+
+<ResponseField name="result" type="ProfileAndToken">
+  <ResponseField name="profile" type="Profile">
+    <ResponseField name="id" type="string">
+      User's unique identifier
+    </ResponseField>
+    <ResponseField name="idpId" type="string">
+      User's ID in the identity provider
+    </ResponseField>
+    <ResponseField name="connectionId" type="string">
+      SSO connection ID used for authentication
+    </ResponseField>
+    <ResponseField name="connectionType" type="ConnectionType">
+      Type of SSO connection
+    </ResponseField>
+    <ResponseField name="organizationId" type="string">
+      Organization ID
+    </ResponseField>
+    <ResponseField name="email" type="string">
+      User's email address
+    </ResponseField>
+    <ResponseField name="firstName" type="string">
+      User's first name
+    </ResponseField>
+    <ResponseField name="lastName" type="string">
+      User's last name
+    </ResponseField>
+    <ResponseField name="groups" type="string[]">
+      User's group memberships
+    </ResponseField>
+    <ResponseField name="rawAttributes" type="object">
+      Raw attributes from the identity provider
+    </ResponseField>
+  </ResponseField>
+  <ResponseField name="accessToken" type="string">
+    Access token for API calls
+  </ResponseField>
+  <ResponseField name="oauthTokens" type="OauthTokens">
+    OAuth tokens from the provider (if available)
+  </ResponseField>
+</ResponseField>
+
+```typescript
+// Public client with PKCE
+const { profile, accessToken } = await workos.sso.getProfileAndToken({
+  code: 'auth_code_from_callback',
+  clientId: 'client_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5',
+  codeVerifier: codeVerifier // from getAuthorizationUrlWithPKCE
+});
+
+// Confidential client (uses API key)
+const { profile, accessToken } = await workos.sso.getProfileAndToken({
+  code: 'auth_code_from_callback',
+  clientId: 'client_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+});
+
+console.log(profile.email);
+```
+
+### getProfile
+
+Retrieves a user profile using an access token.
+
+<ParamField body="accessToken" type="string" required>
+  Access token from getProfileAndToken
+</ParamField>
+
+<ResponseField name="profile" type="Profile">
+  User profile object with identity provider details
+</ResponseField>
+
+```typescript
+const profile = await workos.sso.getProfile({
+  accessToken: 'access_token_123'
+});
+
+console.log(profile.email);
+console.log(profile.firstName, profile.lastName);
+```
+
+## Complete SSO Flow Example
+
+### For Confidential Clients (Server-Side)
+
+```typescript
+// Step 1: Generate authorization URL
+const authUrl = workos.sso.getAuthorizationUrl({
+  organization: 'org_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5',
+  clientId: 'client_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5',
+  redirectUri: 'https://myapp.com/callback',
+  state: generateRandomState()
+});
+
+// Redirect user to authUrl
+res.redirect(authUrl);
+
+// Step 2: Handle callback
+app.get('/callback', async (req, res) => {
+  const { code } = req.query;
+  
+  const { profile, accessToken } = await workos.sso.getProfileAndToken({
+    code,
+    clientId: 'client_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+  });
+  
+  // Create session and authenticate user
+  req.session.userId = profile.id;
+  req.session.email = profile.email;
+  
+  res.redirect('/dashboard');
+});
+```
+
+### For Public Clients (Mobile, Desktop, CLI)
+
+```typescript
+// Step 1: Generate authorization URL with PKCE
+const { url, state, codeVerifier } = await workos.sso.getAuthorizationUrlWithPKCE({
+  organization: 'org_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5',
+  clientId: 'client_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5',
+  redirectUri: 'myapp://callback'
+});
+
+// Store state and codeVerifier securely
+await secureStorage.set('oauth_state', state);
+await secureStorage.set('pkce_verifier', codeVerifier);
+
+// Open browser for authentication
+await openBrowser(url);
+
+// Step 2: Handle callback (when user returns to your app)
+async function handleCallback(callbackUrl) {
+  const params = new URL(callbackUrl).searchParams;
+  const code = params.get('code');
+  const returnedState = params.get('state');
+  
+  // Verify state
+  const storedState = await secureStorage.get('oauth_state');
+  if (returnedState !== storedState) {
+    throw new Error('State mismatch - possible CSRF attack');
+  }
+  
+  // Exchange code for profile
+  const codeVerifier = await secureStorage.get('pkce_verifier');
+  const { profile, accessToken } = await workos.sso.getProfileAndToken({
+    code,
+    clientId: 'client_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5',
+    codeVerifier
+  });
+  
+  // Store tokens securely
+  await secureStorage.set('access_token', accessToken);
+  
+  return profile;
+}
+```
+
+## Custom Attributes
+
+The SSO profile methods support custom attributes from your identity provider:
+
+```typescript
+interface CustomAttributes {
+  department: string;
+  employeeId: string;
+  manager: string;
+}
+
+const { profile } = await workos.sso.getProfileAndToken<CustomAttributes>({
+  code: 'auth_code_123',
+  clientId: 'client_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+});
+
+if (profile.customAttributes) {
+  console.log('Department:', profile.customAttributes.department);
+  console.log('Employee ID:', profile.customAttributes.employeeId);
+}
+```

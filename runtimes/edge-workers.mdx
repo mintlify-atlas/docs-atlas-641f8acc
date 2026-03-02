@@ -1,0 +1,453 @@
+---
+title: "Edge Workers"
+description: "Using the WorkOS SDK in edge computing environments"
+---
+
+The WorkOS SDK provides a specialized build optimized for edge worker environments like Cloudflare Workers, Vercel Edge Functions, and Convex.
+
+## Supported Platforms
+
+The SDK automatically detects and optimizes for these edge platforms:
+
+<CardGroup cols={2}>
+  <Card title="Cloudflare Workers" icon="cloudflare">
+    Serverless JavaScript execution at the edge
+  </Card>
+  
+  <Card title="Vercel Edge Functions" icon="vercel">
+    Edge middleware and API routes
+  </Card>
+  
+  <Card title="Convex" icon="database">
+    Backend platform with edge functions
+  </Card>
+</CardGroup>
+
+## Automatic Runtime Detection
+
+The SDK uses conditional exports to automatically load the worker build:
+
+```json:package.json
+{
+  "exports": {
+    ".": {
+      "workerd": "./lib/index.worker.js",      // Cloudflare Workers
+      "edge-light": "./lib/index.worker.js",   // Vercel Edge
+      "convex": "./lib/index.worker.js"        // Convex
+    }
+  }
+}
+```
+
+You don't need to configure anything - just import normally:
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+// Automatically uses index.worker.js in edge environments
+```
+
+## Worker Build Differences
+
+The worker build (`index.worker.js`) is optimized for edge constraints:
+
+<AccordionGroup>
+  <Accordion title="Web Standards Only" icon="globe">
+    Uses only Web Standards APIs (no Node.js APIs):
+    - `fetch()` instead of Node.js `http`
+    - `SubtleCrypto` for cryptographic operations
+    - `console.warn()` instead of `process.emitWarning()`
+  </Accordion>
+  
+  <Accordion title="Limited Headers" icon="header">
+    The worker build has simplified header handling:
+    
+    ```typescript:src/index.worker.ts
+    createHttpClient(options: WorkOSOptions, userAgent: string): HttpClient {
+      const headers: Record<string, string> = {
+        'User-Agent': userAgent,
+      };
+      
+      // Only plain object headers supported
+      const configHeaders = options.config?.headers;
+      if (
+        configHeaders &&
+        typeof configHeaders === 'object' &&
+        !Array.isArray(configHeaders) &&
+        !(configHeaders instanceof Headers)
+      ) {
+        Object.assign(headers, configHeaders);
+      }
+      
+      if (this.key) {
+        headers['Authorization'] = `Bearer ${this.key}`;
+      }
+      
+      return new FetchHttpClient(this.baseURL, { headers });
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Console Warnings" icon="triangle-exclamation">
+    Warnings use `console.warn()` instead of `process.emitWarning()`:
+    
+    ```typescript:src/index.worker.ts
+    emitWarning(warning: string): void {
+      return console.warn(`WorkOS: ${warning}`);
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Cloudflare Workers
+
+### Installation
+
+```bash
+npm install @workos-inc/node
+```
+
+### Basic Example
+
+```typescript worker.ts
+import { WorkOS } from '@workos-inc/node';
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const workos = new WorkOS(env.WORKOS_API_KEY);
+
+    try {
+      const { data: users } = await workos.userManagement.listUsers();
+      return Response.json(users);
+    } catch (error) {
+      return Response.json(
+        { error: error.message },
+        { status: 500 }
+      );
+    }
+  },
+};
+```
+
+### Environment Variables
+
+Store your API key in Cloudflare Workers secrets:
+
+```bash
+wrangler secret put WORKOS_API_KEY
+```
+
+Then access it via the `env` parameter:
+
+```typescript worker.ts
+interface Env {
+  WORKOS_API_KEY: string;
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const workos = new WorkOS(env.WORKOS_API_KEY);
+    // ...
+  },
+};
+```
+
+### Webhook Verification
+
+```typescript worker.ts
+import { WorkOS } from '@workos-inc/node';
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const workos = new WorkOS(env.WORKOS_API_KEY);
+
+    const payload = await request.text();
+    const signature = request.headers.get('workos-signature');
+
+    try {
+      const webhook = await workos.webhooks.constructEvent({
+        payload,
+        sigHeader: signature,
+        secret: env.WORKOS_WEBHOOK_SECRET,
+      });
+
+      console.log('Webhook event:', webhook.event);
+
+      return Response.json({ received: true });
+    } catch (error) {
+      return Response.json(
+        { error: 'Invalid signature' },
+        { status: 400 }
+      );
+    }
+  },
+};
+```
+
+### wrangler.toml Configuration
+
+```toml wrangler.toml
+name = "workos-worker"
+main = "src/worker.ts"
+compatibility_date = "2024-01-01"
+
+[vars]
+WORKOS_CLIENT_ID = "client_123"
+
+# Use secrets for sensitive values:
+# wrangler secret put WORKOS_API_KEY
+# wrangler secret put WORKOS_WEBHOOK_SECRET
+```
+
+## Vercel Edge Functions
+
+### Installation
+
+```bash
+npm install @workos-inc/node
+```
+
+### Edge API Route
+
+```typescript app/api/users/route.ts
+import { WorkOS } from '@workos-inc/node';
+import { NextResponse } from 'next/server';
+
+// Force this route to use Edge Runtime
+export const runtime = 'edge';
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+
+export async function GET() {
+  try {
+    const { data: users } = await workos.userManagement.listUsers();
+    return NextResponse.json(users);
+  } catch (error) {
+    return NextResponse.json(
+      { error: error.message },
+      { status: 500 }
+    );
+  }
+}
+```
+
+### Edge Middleware
+
+```typescript middleware.ts
+import { WorkOS } from '@workos-inc/node';
+import { NextRequest, NextResponse } from 'next/server';
+
+export const config = {
+  matcher: '/api/:path*',
+};
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+
+export async function middleware(request: NextRequest) {
+  const token = request.cookies.get('session')?.value;
+
+  if (!token) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+
+  try {
+    // Verify session token
+    const session = await workos.userManagement.authenticateWithRefreshToken({
+      refreshToken: token,
+      clientId: process.env.WORKOS_CLIENT_ID!,
+    });
+
+    const response = NextResponse.next();
+    response.headers.set('X-User-Id', session.user.id);
+    return response;
+  } catch (error) {
+    return NextResponse.redirect(new URL('/login', request.url));
+  }
+}
+```
+
+### Environment Variables
+
+```bash .env.local
+WORKOS_API_KEY=sk_test_1234567890
+WORKOS_CLIENT_ID=client_1234567890
+```
+
+## Convex
+
+### Installation
+
+```bash
+npm install @workos-inc/node
+```
+
+### Convex Function
+
+```typescript convex/users.ts
+import { query } from './_generated/server';
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+
+export const listUsers = query(async () => {
+  const { data: users } = await workos.userManagement.listUsers();
+  return users;
+});
+```
+
+### Environment Variables
+
+Set environment variables in the Convex dashboard or via CLI:
+
+```bash
+npx convex env set WORKOS_API_KEY sk_test_1234567890
+```
+
+## Testing Edge Functions
+
+### Cloudflare Workers (Miniflare)
+
+```typescript worker.test.ts
+import { unstable_dev } from 'wrangler';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+
+describe('Worker', () => {
+  let worker;
+
+  beforeAll(async () => {
+    worker = await unstable_dev('src/worker.ts', {
+      experimental: { disableExperimentalWarning: true },
+    });
+  });
+
+  afterAll(async () => {
+    await worker.stop();
+  });
+
+  it('lists users', async () => {
+    const resp = await worker.fetch('/users');
+    expect(resp.status).toBe(200);
+    
+    const users = await resp.json();
+    expect(Array.isArray(users)).toBe(true);
+  });
+});
+```
+
+### Vercel Edge Functions (Next.js)
+
+```typescript app/api/users/route.test.ts
+import { GET } from './route';
+import { NextRequest } from 'next/server';
+
+jest.mock('@workos-inc/node');
+
+it('returns users', async () => {
+  const request = new NextRequest('http://localhost:3000/api/users');
+  const response = await GET(request);
+  
+  expect(response.status).toBe(200);
+  
+  const data = await response.json();
+  expect(Array.isArray(data)).toBe(true);
+});
+```
+
+## Limitations
+
+<Warning>
+  Edge runtimes have several constraints compared to Node.js:
+</Warning>
+
+<AccordionGroup>
+  <Accordion title="No Node.js APIs" icon="ban">
+    You cannot use Node.js-specific modules like `fs`, `path`, or `crypto` (use `SubtleCrypto` instead).
+  </Accordion>
+  
+  <Accordion title="Execution Time Limits" icon="clock">
+    Most edge platforms have CPU time limits (typically 50ms for Cloudflare Workers free tier, 10-30 seconds for paid tiers).
+  </Accordion>
+  
+  <Accordion title="Memory Constraints" icon="memory">
+    Edge workers typically have 128MB RAM limits. The WorkOS SDK is lightweight but be mindful of response sizes.
+  </Accordion>
+  
+  <Accordion title="Cold Starts" icon="snowflake">
+    First requests may be slower due to cold starts. Keep initialization code minimal.
+  </Accordion>
+</AccordionGroup>
+
+## Performance Tips
+
+<Steps>
+  <Step title="Initialize outside handlers">
+    Create the WorkOS instance outside your handler function to reuse across requests:
+    
+    ```typescript
+    // Good: Reused across requests
+    const workos = new WorkOS(env.WORKOS_API_KEY);
+    
+    export default {
+      async fetch(request: Request, env: Env) {
+        // Use workos here
+      }
+    }
+    ```
+  </Step>
+  
+  <Step title="Use streaming for large responses">
+    When dealing with large datasets, use pagination:
+    
+    ```typescript
+    const { data: users, listMetadata } = 
+      await workos.userManagement.listUsers({
+        limit: 10,
+      });
+    
+    // Fetch next page if needed
+    if (listMetadata.after) {
+      const nextPage = await workos.userManagement.listUsers({
+        after: listMetadata.after,
+        limit: 10,
+      });
+    }
+    ```
+  </Step>
+  
+  <Step title="Cache responses when possible">
+    Use edge caching for frequently accessed data:
+    
+    ```typescript
+    const cacheKey = `users-${organizationId}`;
+    const cached = await cache.get(cacheKey);
+    
+    if (cached) return cached;
+    
+    const { data: users } = await workos.userManagement.listUsers({
+      organizationId,
+    });
+    
+    await cache.put(cacheKey, users, { expirationTtl: 300 });
+    return users;
+    ```
+  </Step>
+</Steps>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="User Management" icon="users" href="/api/user-management">
+    Manage users at the edge
+  </Card>
+  
+  <Card title="Webhooks" icon="webhook" href="/api/webhooks">
+    Verify webhooks in edge functions
+  </Card>
+  
+  <Card title="Node.js Runtime" icon="node" href="/runtimes/nodejs">
+    Compare with standard Node.js usage
+  </Card>
+  
+  <Card title="Performance" icon="gauge-high" href="/runtimes/overview">
+    Optimize edge function performance
+  </Card>
+</CardGroup>

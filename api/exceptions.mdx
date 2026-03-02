@@ -1,0 +1,515 @@
+---
+title: Exceptions
+description: Exception types thrown by the WorkOS SDK
+---
+
+# Exceptions
+
+The WorkOS SDK throws specific exception types for different error scenarios. All exceptions implement the `RequestException` interface and extend the native `Error` class.
+
+## Exception Types
+
+### BadRequestException
+
+Thrown when the API returns a 400 Bad Request status code.
+
+**Properties**
+
+<ResponseField name="status" type="number" required>
+  HTTP status code (400)
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Exception name: 'BadRequestException'
+</ResponseField>
+
+<ResponseField name="message" type="string" required>
+  Error message (default: 'Bad request')
+</ResponseField>
+
+<ResponseField name="code" type="string">
+  Optional error code
+</ResponseField>
+
+<ResponseField name="errors" type="unknown[]">
+  Optional array of validation errors
+</ResponseField>
+
+<ResponseField name="requestID" type="string" required>
+  Unique identifier for the request
+</ResponseField>
+
+**Example**
+
+```typescript
+try {
+  await workos.userManagement.createUser({ email: 'invalid' });
+} catch (error) {
+  if (error instanceof BadRequestException) {
+    console.error('Bad request:', error.message);
+    console.error('Request ID:', error.requestID);
+    console.error('Errors:', error.errors);
+  }
+}
+```
+
+### UnauthorizedException
+
+Thrown when the API returns a 401 Unauthorized status code, typically due to an invalid API key.
+
+**Properties**
+
+<ResponseField name="status" type="number" required>
+  HTTP status code (401)
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Exception name: 'UnauthorizedException'
+</ResponseField>
+
+<ResponseField name="message" type="string" required>
+  Error message: 'Could not authorize the request. Maybe your API key is invalid?'
+</ResponseField>
+
+<ResponseField name="requestID" type="string" required>
+  Unique identifier for the request
+</ResponseField>
+
+**Example**
+
+```typescript
+try {
+  const workos = new WorkOS('invalid_key');
+  await workos.userManagement.listUsers();
+} catch (error) {
+  if (error instanceof UnauthorizedException) {
+    console.error('Authentication failed:', error.message);
+    console.error('Request ID:', error.requestID);
+  }
+}
+```
+
+### NotFoundException
+
+Thrown when the API returns a 404 Not Found status code.
+
+**Properties**
+
+<ResponseField name="status" type="number" required>
+  HTTP status code (404)
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Exception name: 'NotFoundException'
+</ResponseField>
+
+<ResponseField name="message" type="string" required>
+  Error message (default: 'The requested path \'{path}\' could not be found.')
+</ResponseField>
+
+<ResponseField name="code" type="string">
+  Optional error code
+</ResponseField>
+
+<ResponseField name="requestID" type="string" required>
+  Unique identifier for the request
+</ResponseField>
+
+**Constructor Parameters**
+
+<ParamField path="code" type="string">
+  Optional error code
+</ParamField>
+
+<ParamField path="message" type="string">
+  Custom error message
+</ParamField>
+
+<ParamField path="path" type="string" required>
+  The requested path that was not found
+</ParamField>
+
+<ParamField path="requestID" type="string" required>
+  Unique identifier for the request
+</ParamField>
+
+**Example**
+
+```typescript
+try {
+  await workos.userManagement.getUser('user_invalid');
+} catch (error) {
+  if (error instanceof NotFoundException) {
+    console.error('Resource not found:', error.message);
+    console.error('Error code:', error.code);
+  }
+}
+```
+
+### UnprocessableEntityException
+
+Thrown when the API returns a 422 Unprocessable Entity status code, typically due to validation errors.
+
+**Properties**
+
+<ResponseField name="status" type="number" required>
+  HTTP status code (422)
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Exception name: 'UnprocessableEntityException'
+</ResponseField>
+
+<ResponseField name="message" type="string" required>
+  Error message with validation requirements
+</ResponseField>
+
+<ResponseField name="code" type="string">
+  Optional error code
+</ResponseField>
+
+<ResponseField name="requestID" type="string" required>
+  Unique identifier for the request
+</ResponseField>
+
+**Constructor Parameters**
+
+<ParamField path="code" type="string">
+  Optional error code
+</ParamField>
+
+<ParamField path="errors" type="UnprocessableEntityError[]">
+  Array of validation errors
+</ParamField>
+
+<ParamField path="message" type="string">
+  Custom error message
+</ParamField>
+
+<ParamField path="requestID" type="string" required>
+  Unique identifier for the request
+</ParamField>
+
+**Example**
+
+```typescript
+try {
+  await workos.organizations.createOrganization({
+    name: '', // Invalid: empty name
+  });
+} catch (error) {
+  if (error instanceof UnprocessableEntityException) {
+    console.error(error.message);
+    // Output: "The following requirement must be met:
+    //          organization_name_required"
+  }
+}
+```
+
+### RateLimitExceededException
+
+Thrown when the API returns a 429 Too Many Requests status code.
+
+**Properties**
+
+<ResponseField name="status" type="number" required>
+  HTTP status code (429)
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Exception name: 'RateLimitExceededException'
+</ResponseField>
+
+<ResponseField name="message" type="string" required>
+  Error message
+</ResponseField>
+
+<ResponseField name="requestID" type="string" required>
+  Unique identifier for the request
+</ResponseField>
+
+<ResponseField name="retryAfter" type="number | null" required>
+  The number of seconds to wait before retrying the request
+</ResponseField>
+
+**Example**
+
+```typescript
+try {
+  await workos.userManagement.listUsers();
+} catch (error) {
+  if (error instanceof RateLimitExceededException) {
+    console.error('Rate limit exceeded');
+    console.error(`Retry after ${error.retryAfter} seconds`);
+    
+    if (error.retryAfter) {
+      setTimeout(() => {
+        // Retry the request
+      }, error.retryAfter * 1000);
+    }
+  }
+}
+```
+
+### OauthException
+
+Thrown when OAuth authentication errors occur.
+
+**Properties**
+
+<ResponseField name="status" type="number" required>
+  HTTP status code
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Exception name: 'OauthException'
+</ResponseField>
+
+<ResponseField name="message" type="string" required>
+  Formatted error message
+</ResponseField>
+
+<ResponseField name="requestID" type="string" required>
+  Unique identifier for the request
+</ResponseField>
+
+<ResponseField name="error" type="string | undefined" required>
+  OAuth error code
+</ResponseField>
+
+<ResponseField name="errorDescription" type="string | undefined" required>
+  Detailed error description
+</ResponseField>
+
+<ResponseField name="rawData" type="unknown" required>
+  Raw error response data
+</ResponseField>
+
+**Example**
+
+```typescript
+try {
+  await workos.userManagement.authenticateWithCode({
+    code: 'invalid_code',
+    clientId: 'client_123',
+  });
+} catch (error) {
+  if (error instanceof OauthException) {
+    console.error('OAuth error:', error.error);
+    console.error('Description:', error.errorDescription);
+    console.error('Status:', error.status);
+  }
+}
+```
+
+### GenericServerException
+
+Thrown for generic server errors (5xx status codes).
+
+**Properties**
+
+<ResponseField name="status" type="number" required>
+  HTTP status code (5xx)
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Exception name: 'GenericServerException'
+</ResponseField>
+
+<ResponseField name="message" type="string" required>
+  Error message (default: 'The request could not be completed.')
+</ResponseField>
+
+<ResponseField name="requestID" type="string" required>
+  Unique identifier for the request
+</ResponseField>
+
+<ResponseField name="rawData" type="unknown" required>
+  Raw error response data
+</ResponseField>
+
+**Example**
+
+```typescript
+try {
+  await workos.userManagement.listUsers();
+} catch (error) {
+  if (error instanceof GenericServerException) {
+    console.error('Server error:', error.message);
+    console.error('Status:', error.status);
+    console.error('Request ID:', error.requestID);
+  }
+}
+```
+
+### SignatureVerificationException
+
+Thrown when webhook signature verification fails.
+
+**Properties**
+
+<ResponseField name="name" type="string" required>
+  Exception name: 'SignatureVerificationException'
+</ResponseField>
+
+<ResponseField name="message" type="string" required>
+  Error message (default: 'Signature verification failed.')
+</ResponseField>
+
+**Example**
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_test_key');
+
+try {
+  const webhook = workos.webhooks.constructEvent({
+    payload: requestBody,
+    sigHeader: request.headers['workos-signature'],
+    secret: 'webhook_secret',
+  });
+} catch (error) {
+  if (error instanceof SignatureVerificationException) {
+    console.error('Invalid webhook signature:', error.message);
+    // Return 400 Bad Request
+  }
+}
+```
+
+### ApiKeyRequiredException
+
+Thrown when an API key is required but not provided for a specific endpoint.
+
+**Properties**
+
+<ResponseField name="status" type="number" required>
+  HTTP status code (403)
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Exception name: 'ApiKeyRequiredException'
+</ResponseField>
+
+<ResponseField name="message" type="string" required>
+  Detailed error message with initialization instructions
+</ResponseField>
+
+<ResponseField name="path" type="string" required>
+  The API path that requires an API key
+</ResponseField>
+
+**Example**
+
+```typescript
+try {
+  const workos = new WorkOS(); // No API key provided
+  await workos.organizations.listOrganizations();
+} catch (error) {
+  if (error instanceof ApiKeyRequiredException) {
+    console.error(error.message);
+    // Output: 'API key required for "/organizations". 
+    //          For server-side apps, initialize with: new WorkOS("sk_..."). 
+    //          For browser/mobile/CLI apps, use authenticateWithCodeAndVerifier()...'
+  }
+}
+```
+
+### NoApiKeyProvidedException
+
+Thrown when no API key is provided during SDK initialization.
+
+**Properties**
+
+<ResponseField name="status" type="number" required>
+  HTTP status code (500)
+</ResponseField>
+
+<ResponseField name="name" type="string" required>
+  Exception name: 'NoApiKeyProvidedException'
+</ResponseField>
+
+<ResponseField name="message" type="string" required>
+  Error message with instructions for providing an API key
+</ResponseField>
+
+**Example**
+
+```typescript
+try {
+  const workos = new WorkOS();
+} catch (error) {
+  if (error instanceof NoApiKeyProvidedException) {
+    console.error(error.message);
+    // Output: 'Missing API key. Pass it to the constructor (new WorkOS("sk_test_...")) 
+    //          or define it in the WORKOS_API_KEY environment variable.'
+  }
+}
+```
+
+## Error Handling Best Practices
+
+### Handle specific exceptions
+
+```typescript
+import {
+  WorkOS,
+  UnauthorizedException,
+  NotFoundException,
+  RateLimitExceededException,
+} from '@workos-inc/node';
+
+const workos = new WorkOS('sk_test_key');
+
+try {
+  const user = await workos.userManagement.getUser('user_123');
+} catch (error) {
+  if (error instanceof UnauthorizedException) {
+    // Handle authentication error
+    console.error('Invalid API key');
+  } else if (error instanceof NotFoundException) {
+    // Handle not found error
+    console.error('User not found');
+  } else if (error instanceof RateLimitExceededException) {
+    // Handle rate limit with retry
+    await new Promise(resolve => setTimeout(resolve, error.retryAfter * 1000));
+  } else {
+    // Handle other errors
+    console.error('Unexpected error:', error);
+  }
+}
+```
+
+### Log request IDs for debugging
+
+```typescript
+try {
+  await workos.userManagement.listUsers();
+} catch (error) {
+  if ('requestID' in error) {
+    console.error(`Request failed. Request ID: ${error.requestID}`);
+    // Share this ID with WorkOS support for investigation
+  }
+}
+```
+
+### Implement retry logic
+
+```typescript
+async function fetchWithRetry(operation, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (error instanceof RateLimitExceededException && i < maxRetries - 1) {
+        const delay = error.retryAfter ? error.retryAfter * 1000 : 1000 * Math.pow(2, i);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
+const users = await fetchWithRetry(() => workos.userManagement.listUsers());
+```

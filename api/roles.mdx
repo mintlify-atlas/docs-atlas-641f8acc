@@ -1,0 +1,359 @@
+---
+title: Roles API
+description: Manage roles and permissions across your application
+---
+
+The Roles API is part of WorkOS's authorization system and is primarily accessed through the [Authorization API](/api/authorization). This page provides an overview of role concepts and data structures.
+
+<Info>
+  For complete role management functionality, see:
+  - [Authorization API](/api/authorization) - Full RBAC implementation
+  - [Organizations API](/api/organizations) - Organization-specific role listing
+</Info>
+
+## Role Types
+
+WorkOS supports two types of roles:
+
+### Environment Roles
+
+Environment roles are global roles that apply across your entire WorkOS environment.
+
+```typescript
+interface EnvironmentRole {
+  object: 'role';
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  permissions: string[];
+  resourceTypeSlug: string;
+  type: 'EnvironmentRole';
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+### Organization Roles
+
+Organization roles are scoped to specific organizations and can inherit from environment roles or be completely custom.
+
+```typescript
+interface OrganizationRole {
+  object: 'role';
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  permissions: string[];
+  resourceTypeSlug: string;
+  type: 'OrganizationRole';
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+## Role Properties
+
+<ParamField path="object" type="'role'">
+  Object type identifier.
+</ParamField>
+
+<ParamField path="id" type="string">
+  Unique identifier for the role.
+</ParamField>
+
+<ParamField path="name" type="string">
+  Display name of the role (e.g., "Administrator", "Member").
+</ParamField>
+
+<ParamField path="slug" type="string">
+  Unique slug identifier for the role (e.g., "admin", "member").
+</ParamField>
+
+<ParamField path="description" type="string | null">
+  Optional description of what the role allows.
+</ParamField>
+
+<ParamField path="permissions" type="string[]">
+  Array of permission slugs associated with this role.
+</ParamField>
+
+<ParamField path="resourceTypeSlug" type="string">
+  The type of resource this role applies to (e.g., "project", "document").
+</ParamField>
+
+<ParamField path="type" type="'EnvironmentRole' | 'OrganizationRole'">
+  Indicates whether the role is environment-scoped or organization-scoped.
+</ParamField>
+
+<ParamField path="createdAt" type="string">
+  ISO-8601 timestamp when the role was created.
+</ParamField>
+
+<ParamField path="updatedAt" type="string">
+  ISO-8601 timestamp when the role was last updated.
+</ParamField>
+
+## Managing Roles
+
+### Environment Roles
+
+Manage environment roles using the Authorization API:
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_example_123456789');
+
+// Create an environment role
+const role = await workos.authorization.createEnvironmentRole({
+  slug: 'admin',
+  name: 'Administrator',
+  description: 'Full access to all resources',
+  resourceTypeSlug: 'project',
+  permissions: ['read', 'write', 'delete', 'admin'],
+});
+
+// List environment roles
+const roleList = await workos.authorization.listEnvironmentRoles();
+
+// Get a specific role
+const adminRole = await workos.authorization.getEnvironmentRole('admin');
+
+// Update a role
+const updatedRole = await workos.authorization.updateEnvironmentRole('admin', {
+  name: 'Super Administrator',
+  description: 'Updated description',
+});
+```
+
+### Organization Roles
+
+Manage organization-specific roles:
+
+```typescript
+// Create an organization role
+const orgRole = await workos.authorization.createOrganizationRole('org_123', {
+  slug: 'member',
+  name: 'Member',
+  description: 'Standard member access',
+  resourceTypeSlug: 'project',
+  permissions: ['read', 'write'],
+});
+
+// List organization roles
+const orgRoles = await workos.authorization.listOrganizationRoles('org_123');
+
+// Get a specific organization role
+const memberRole = await workos.authorization.getOrganizationRole('org_123', 'member');
+
+// Delete an organization role
+await workos.authorization.deleteOrganizationRole('org_123', 'member');
+```
+
+### Listing Organization Roles via Organizations API
+
+You can also retrieve roles through the Organizations API:
+
+```typescript
+const roleList = await workos.organizations.listOrganizationRoles({
+  organizationId: 'org_123',
+});
+
+console.log(roleList.data);
+```
+
+## Managing Role Permissions
+
+### Set Permissions (Replace All)
+
+```typescript
+// Set environment role permissions
+const role = await workos.authorization.setEnvironmentRolePermissions('admin', {
+  permissions: ['read', 'write', 'delete', 'admin', 'export'],
+});
+
+// Set organization role permissions
+const orgRole = await workos.authorization.setOrganizationRolePermissions('org_123', 'member', {
+  permissions: ['read', 'write'],
+});
+```
+
+### Add Single Permission
+
+```typescript
+// Add to environment role
+const role = await workos.authorization.addEnvironmentRolePermission('admin', {
+  permissionSlug: 'export',
+});
+
+// Add to organization role
+const orgRole = await workos.authorization.addOrganizationRolePermission('org_123', 'member', {
+  permissionSlug: 'export',
+});
+```
+
+### Remove Permission
+
+```typescript
+// Only available for organization roles
+await workos.authorization.removeOrganizationRolePermission('org_123', 'member', {
+  permissionSlug: 'delete',
+});
+```
+
+## Role Assignments
+
+Assign roles to users for specific resources:
+
+```typescript
+// Assign a role to a user for a resource
+const assignment = await workos.authorization.assignRole({
+  organizationMembershipId: 'om_123',
+  roleSlug: 'admin',
+  resourceId: 'resource_123',
+});
+
+// List role assignments for a user
+const assignments = await workos.authorization.listRoleAssignments({
+  organizationMembershipId: 'om_123',
+});
+
+// Remove a role assignment
+await workos.authorization.removeRole({
+  organizationMembershipId: 'om_123',
+  roleSlug: 'admin',
+  resourceId: 'resource_123',
+});
+```
+
+## Response Types
+
+### RoleList
+
+```typescript
+interface RoleList {
+  object: 'list';
+  data: Role[];
+}
+
+type Role = EnvironmentRole | OrganizationRole;
+```
+
+### RoleAssignment
+
+```typescript
+interface RoleAssignment {
+  object: 'role_assignment';
+  id: string;
+  role: {
+    slug: string;
+  };
+  resource: {
+    id: string;
+    externalId: string;
+    resourceTypeSlug: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+## Best Practices
+
+### Environment vs Organization Roles
+
+- Use **Environment Roles** for:
+  - Global system roles (e.g., "Super Admin")
+  - Default role templates that apply across all organizations
+  - Standardized access patterns
+
+- Use **Organization Roles** for:
+  - Organization-specific access control
+  - Custom roles per tenant
+  - Roles that need to vary by organization
+
+### Role Naming
+
+- Use clear, descriptive names: "Administrator", "Member", "Viewer"
+- Keep slugs lowercase and simple: "admin", "member", "viewer"
+- Add descriptions to clarify what each role permits
+
+### Permission Management
+
+- Start with minimal permissions and add as needed
+- Group related permissions (e.g., read/write for the same resource)
+- Use resource type slugs to organize permissions by domain
+
+### Role Assignment
+
+- Assign roles at the appropriate resource level
+- Use role assignments instead of direct permission grants
+- Regularly audit role assignments for security
+
+## Common Patterns
+
+### Hierarchical Roles
+
+```typescript
+// Create a hierarchy of roles
+const viewer = await workos.authorization.createEnvironmentRole({
+  slug: 'viewer',
+  name: 'Viewer',
+  resourceTypeSlug: 'project',
+  permissions: ['read'],
+});
+
+const editor = await workos.authorization.createEnvironmentRole({
+  slug: 'editor',
+  name: 'Editor',
+  resourceTypeSlug: 'project',
+  permissions: ['read', 'write'],
+});
+
+const admin = await workos.authorization.createEnvironmentRole({
+  slug: 'admin',
+  name: 'Administrator',
+  resourceTypeSlug: 'project',
+  permissions: ['read', 'write', 'delete', 'admin'],
+});
+```
+
+### Multi-Tenant Roles
+
+```typescript
+// Create organization-specific variations
+for (const org of organizations) {
+  await workos.authorization.createOrganizationRole(org.id, {
+    slug: 'custom-role',
+    name: `${org.name} Custom Role`,
+    resourceTypeSlug: 'project',
+    permissions: org.customPermissions,
+  });
+}
+```
+
+### Dynamic Role Assignment
+
+```typescript
+// Assign role based on user context
+async function grantAccess(userId: string, projectId: string, level: 'view' | 'edit' | 'admin') {
+  const roleMap = {
+    view: 'viewer',
+    edit: 'editor',
+    admin: 'admin',
+  };
+
+  await workos.authorization.assignRole({
+    organizationMembershipId: userId,
+    roleSlug: roleMap[level],
+    resourceId: projectId,
+  });
+}
+```
+
+## Related Resources
+
+- [Authorization API](/api/authorization) - Complete authorization functionality
+- [Organizations API](/api/organizations) - Organization management

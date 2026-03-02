@@ -1,0 +1,110 @@
+---
+title: 'Events'
+description: 'List and retrieve events from your WorkOS environment'
+---
+
+## Overview
+
+The Events API allows you to retrieve events that have occurred in your WorkOS environment. Events represent actions and state changes across all WorkOS services.
+
+## Methods
+
+### listEvents
+
+Retrieves a list of events based on the provided filter criteria.
+
+<ParamField path="options" type="ListEventOptions" required>
+  Configuration options for listing events
+  
+  <Expandable title="properties">
+    <ParamField path="events" type="EventName[]" required>
+      Array of event names to filter by
+    </ParamField>
+    
+    <ParamField path="rangeStart" type="string">
+      ISO 8601 datetime string for the start of the event range
+    </ParamField>
+    
+    <ParamField path="rangeEnd" type="string">
+      ISO 8601 datetime string for the end of the event range
+    </ParamField>
+    
+    <ParamField path="limit" type="number">
+      Maximum number of events to return (default: 10)
+    </ParamField>
+    
+    <ParamField path="after" type="string">
+      Cursor for pagination to fetch the next page of results
+    </ParamField>
+    
+    <ParamField path="organizationId" type="string">
+      Filter events by a specific organization ID
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="List<Event>" type="object">
+  A paginated list of events
+  
+  <Expandable title="properties">
+    <ResponseField name="data" type="Event[]">
+      Array of event objects
+    </ResponseField>
+    
+    <ResponseField name="listMetadata" type="object">
+      Pagination metadata including `before` and `after` cursors
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+#### Example
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_example_123456789');
+
+const events = await workos.events.listEvents({
+  events: ['user.created', 'user.updated'],
+  rangeStart: '2024-01-01T00:00:00Z',
+  rangeEnd: '2024-12-31T23:59:59Z',
+  limit: 20,
+  organizationId: 'org_01H8Z9Q2Z3Y4X5W6V7U8T9S0R1',
+});
+
+console.log(events.data);
+```
+
+#### Response
+
+```json
+{
+  "data": [
+    {
+      "id": "event_01H8Z9Q2Z3Y4X5W6V7U8T9S0R1",
+      "event": "user.created",
+      "data": {
+        "id": "user_01H8Z9Q2Z3Y4X5W6V7U8T9S0R1",
+        "email": "user@example.com"
+      },
+      "createdAt": "2024-01-15T10:30:00Z"
+    }
+  ],
+  "listMetadata": {
+    "after": "event_01H8Z9Q2Z3Y4X5W6V7U8T9S0R1",
+    "before": null
+  }
+}
+```
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Webhooks" icon="webhook" href="/api/webhooks">
+    Configure webhooks to receive events in real-time
+  </Card>
+  
+  <Card title="Audit Logs" icon="clipboard-list" href="/api/audit-logs">
+    Track security and compliance events
+  </Card>
+</CardGroup>

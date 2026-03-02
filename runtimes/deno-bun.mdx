@@ -1,0 +1,525 @@
+---
+title: "Deno & Bun"
+description: "Using the WorkOS SDK with Deno and Bun runtimes"
+---
+
+The WorkOS SDK fully supports modern JavaScript runtimes like Deno and Bun with automatic runtime detection and optimized builds.
+
+## Deno
+
+### Installation
+
+Deno uses npm specifiers to import packages directly:
+
+```typescript
+import { WorkOS } from 'npm:@workos-inc/node';
+```
+
+Or use an import map for cleaner imports:
+
+```json deno.json
+{
+  "imports": {
+    "@workos-inc/node": "npm:@workos-inc/node@^8.7.0"
+  }
+}
+```
+
+Then import normally:
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+```
+
+### Runtime Detection
+
+The SDK automatically uses the Deno-optimized build via conditional exports:
+
+```json:package.json
+{
+  "exports": {
+    ".": {
+      "deno": {
+        "types": "./lib/index.d.ts",
+        "default": "./lib/index.js"
+      }
+    }
+  }
+}
+```
+
+### Basic Usage
+
+```typescript main.ts
+import { WorkOS } from 'npm:@workos-inc/node';
+
+const workos = new WorkOS(Deno.env.get('WORKOS_API_KEY'));
+
+// List users
+const { data: users } = await workos.userManagement.listUsers();
+console.log(users);
+```
+
+### Environment Variables
+
+Deno uses `Deno.env` to access environment variables:
+
+```typescript
+const workos = new WorkOS(Deno.env.get('WORKOS_API_KEY'));
+```
+
+Or use a `.env` file with the `--env` flag:
+
+```bash .env
+WORKOS_API_KEY=sk_test_1234567890
+WORKOS_CLIENT_ID=client_1234567890
+```
+
+```bash
+deno run --allow-env --allow-net --env main.ts
+```
+
+### Permissions
+
+Deno requires explicit permissions. The WorkOS SDK needs:
+
+<CodeGroup>
+```bash Minimal Permissions
+deno run --allow-net --allow-env main.ts
+```
+
+```bash Development Permissions
+deno run --allow-all main.ts
+```
+</CodeGroup>
+
+Required permissions:
+- `--allow-net`: For making HTTP requests to WorkOS API
+- `--allow-env`: For reading environment variables
+
+### Deno Deploy
+
+The SDK works seamlessly with Deno Deploy:
+
+```typescript main.ts
+import { WorkOS } from 'npm:@workos-inc/node';
+
+const workos = new WorkOS(Deno.env.get('WORKOS_API_KEY'));
+
+Deno.serve(async (req) => {
+  const url = new URL(req.url);
+
+  if (url.pathname === '/users') {
+    try {
+      const { data: users } = await workos.userManagement.listUsers();
+      return Response.json(users);
+    } catch (error) {
+      return Response.json(
+        { error: error.message },
+        { status: 500 }
+      );
+    }
+  }
+
+  return new Response('Not Found', { status: 404 });
+});
+```
+
+Deploy with:
+
+```bash
+deployctl deploy --project=my-project main.ts
+```
+
+### Fresh Framework
+
+Using WorkOS in a Fresh application:
+
+```typescript routes/api/users.ts
+import { Handlers } from '$fresh/server.ts';
+import { WorkOS } from 'npm:@workos-inc/node';
+
+const workos = new WorkOS(Deno.env.get('WORKOS_API_KEY'));
+
+export const handler: Handlers = {
+  async GET(_req, _ctx) {
+    try {
+      const { data: users } = await workos.userManagement.listUsers();
+      return Response.json(users);
+    } catch (error) {
+      return Response.json(
+        { error: error.message },
+        { status: 500 }
+      );
+    }
+  },
+};
+```
+
+### Testing with Deno
+
+```typescript main_test.ts
+import { assertEquals } from 'https://deno.land/std@0.208.0/assert/mod.ts';
+import { WorkOS } from 'npm:@workos-inc/node';
+
+Deno.test('WorkOS SDK initializes', () => {
+  const workos = new WorkOS('sk_test_1234');
+  assertEquals(typeof workos.userManagement.listUsers, 'function');
+});
+
+Deno.test('lists users', async () => {
+  const workos = new WorkOS(Deno.env.get('WORKOS_API_KEY'));
+  const { data: users } = await workos.userManagement.listUsers();
+  assertEquals(Array.isArray(users), true);
+});
+```
+
+Run tests:
+
+```bash
+deno test --allow-net --allow-env
+```
+
+## Bun
+
+### Installation
+
+Bun has a fast npm-compatible package manager:
+
+```bash
+bun add @workos-inc/node
+```
+
+### Runtime Detection
+
+The SDK automatically uses the Bun-optimized build:
+
+```json:package.json
+{
+  "exports": {
+    ".": {
+      "bun": {
+        "types": "./lib/index.d.ts",
+        "import": "./lib/index.js",
+        "require": "./lib/index.cjs"
+      }
+    }
+  }
+}
+```
+
+### Basic Usage
+
+<CodeGroup>
+```typescript ESM (index.ts)
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+
+// List users
+const { data: users } = await workos.userManagement.listUsers();
+console.log(users);
+```
+
+```typescript CommonJS (index.js)
+const { WorkOS } = require('@workos-inc/node');
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+
+// List users
+const { data: users } = await workos.userManagement.listUsers();
+console.log(users);
+```
+</CodeGroup>
+
+### Environment Variables
+
+Bun automatically loads `.env` files:
+
+```bash .env
+WORKOS_API_KEY=sk_test_1234567890
+WORKOS_CLIENT_ID=client_1234567890
+```
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+// Bun automatically loads .env
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+```
+
+Or use `Bun.env`:
+
+```typescript
+const workos = new WorkOS(Bun.env.WORKOS_API_KEY);
+```
+
+### Bun HTTP Server
+
+```typescript server.ts
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+
+const server = Bun.serve({
+  port: 3000,
+  async fetch(req) {
+    const url = new URL(req.url);
+
+    if (url.pathname === '/users') {
+      try {
+        const { data: users } = await workos.userManagement.listUsers();
+        return Response.json(users);
+      } catch (error) {
+        return Response.json(
+          { error: error.message },
+          { status: 500 }
+        );
+      }
+    }
+
+    return new Response('Not Found', { status: 404 });
+  },
+});
+
+console.log(`Server running at http://localhost:${server.port}`);
+```
+
+Run with:
+
+```bash
+bun run server.ts
+```
+
+### Elysia Framework
+
+```typescript app.ts
+import { Elysia } from 'elysia';
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+
+const app = new Elysia()
+  .get('/users', async () => {
+    try {
+      const { data: users } = await workos.userManagement.listUsers();
+      return users;
+    } catch (error) {
+      return { error: error.message };
+    }
+  })
+  .get('/user/:id', async ({ params }) => {
+    try {
+      const user = await workos.userManagement.getUser({
+        userId: params.id,
+      });
+      return user;
+    } catch (error) {
+      return { error: error.message };
+    }
+  })
+  .listen(3000);
+
+console.log(`Server running at http://localhost:${app.server?.port}`);
+```
+
+### Hono Framework
+
+```typescript app.ts
+import { Hono } from 'hono';
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+const app = new Hono();
+
+app.get('/users', async (c) => {
+  try {
+    const { data: users } = await workos.userManagement.listUsers();
+    return c.json(users);
+  } catch (error) {
+    return c.json({ error: error.message }, 500);
+  }
+});
+
+export default {
+  port: 3000,
+  fetch: app.fetch,
+};
+```
+
+### Testing with Bun
+
+Bun has a built-in test runner:
+
+```typescript workos.test.ts
+import { describe, test, expect } from 'bun:test';
+import { WorkOS } from '@workos-inc/node';
+
+describe('WorkOS SDK', () => {
+  test('initializes correctly', () => {
+    const workos = new WorkOS('sk_test_1234');
+    expect(workos).toBeDefined();
+    expect(typeof workos.userManagement.listUsers).toBe('function');
+  });
+
+  test('lists users', async () => {
+    const workos = new WorkOS(process.env.WORKOS_API_KEY);
+    const { data: users } = await workos.userManagement.listUsers();
+    expect(Array.isArray(users)).toBe(true);
+  });
+});
+```
+
+Run tests:
+
+```bash
+bun test
+```
+
+### Performance Benefits
+
+Bun is significantly faster than Node.js for many operations:
+
+<AccordionGroup>
+  <Accordion title="Faster Package Installation" icon="download">
+    Bun's package manager is 10-100x faster than npm:
+    ```bash
+    bun add @workos-inc/node  # Much faster than npm install
+    ```
+  </Accordion>
+  
+  <Accordion title="Faster Startup Time" icon="bolt">
+    Bun starts TypeScript files directly without transpilation:
+    ```bash
+    bun run app.ts  # No build step needed
+    ```
+  </Accordion>
+  
+  <Accordion title="Faster HTTP Requests" icon="globe">
+    Bun's native `fetch` implementation is optimized for performance.
+  </Accordion>
+</AccordionGroup>
+
+## Runtime Comparison
+
+<CardGroup cols={3}>
+  <Card title="Node.js" icon="node">
+    - Most mature ecosystem
+    - Largest package compatibility
+    - Industry standard
+    - Slower startup and execution
+  </Card>
+  
+  <Card title="Deno" icon="deno">
+    - Secure by default (permissions)
+    - Native TypeScript support
+    - Built-in tooling
+    - Web Standards API
+  </Card>
+  
+  <Card title="Bun" icon="bun">
+    - Fastest performance
+    - Built-in TypeScript
+    - npm compatibility
+    - Fast package manager
+  </Card>
+</CardGroup>
+
+## Ecosystem Testing
+
+The WorkOS SDK includes automated runtime compatibility tests:
+
+```typescript:scripts/ecosystem-check.ts
+const tests: Record<string, { cmd: string; args: string[] }> = {
+  'node-cjs': {
+    cmd: 'node',
+    args: ['-e', `console.log('✅ Node CJS:', require("${lib}/index.cjs").WorkOS.name)`],
+  },
+  'node-esm': {
+    cmd: 'node',
+    args: ['-e', `import("${lib}/index.js").then(m => console.log('✅ Node ESM:', m.WorkOS.name))`],
+  },
+  deno: {
+    cmd: 'deno',
+    args: ['eval', `import("${lib}/index.js").then(m => console.log('✅ Deno:', m.WorkOS.name))`],
+  },
+  'bun-cjs': {
+    cmd: 'bun',
+    args: ['-e', `console.log('✅ Bun CJS:', require("${lib}/index.cjs").WorkOS.name)`],
+  },
+  'bun-esm': {
+    cmd: 'bun',
+    args: ['-e', `import("${lib}/index.js").then(m => console.log('✅ Bun ESM:', m.WorkOS.name))`],
+  },
+};
+```
+
+Run compatibility checks:
+
+```bash
+npm run check:runtimes
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Deno: Permission Denied" icon="lock">
+    Ensure you grant the necessary permissions:
+    
+    ```bash
+    deno run --allow-net --allow-env main.ts
+    ```
+  </Accordion>
+  
+  <Accordion title="Deno: Module Not Found" icon="search">
+    Use the `npm:` specifier for npm packages:
+    
+    ```typescript
+    import { WorkOS } from 'npm:@workos-inc/node';
+    ```
+  </Accordion>
+  
+  <Accordion title="Bun: TypeScript Errors" icon="code">
+    Bun supports TypeScript natively. Ensure your `tsconfig.json` is compatible:
+    
+    ```json tsconfig.json
+    {
+      "compilerOptions": {
+        "lib": ["ESNext"],
+        "module": "ESNext",
+        "target": "ESNext",
+        "moduleResolution": "bundler"
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Bun: Module Resolution" icon="puzzle-piece">
+    Bun uses its own module resolution algorithm. If you encounter issues, try:
+    
+    ```bash
+    bun pm cache rm
+    bun install --force
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Node.js Runtime" icon="node" href="/runtimes/nodejs">
+    Learn about Node.js-specific features
+  </Card>
+  
+  <Card title="Edge Workers" icon="cloudflare" href="/runtimes/edge-workers">
+    Deploy to Cloudflare Workers or Vercel Edge
+  </Card>
+  
+  <Card title="User Management" icon="users" href="/api/user-management">
+    Manage users and authentication
+  </Card>
+  
+  <Card title="Webhooks" icon="webhook" href="/api/webhooks">
+    Handle WorkOS webhook events
+  </Card>
+</CardGroup>

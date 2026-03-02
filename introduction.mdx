@@ -1,0 +1,123 @@
+---
+title: WorkOS Node.js SDK
+description: Official Node.js SDK for integrating WorkOS authentication, SSO, Directory Sync, and enterprise features into your application
+---
+
+The WorkOS Node.js SDK provides convenient access to the WorkOS API from applications written in server-side JavaScript. Build enterprise-ready authentication and user management with minimal code.
+
+## Key features
+
+The WorkOS Node.js SDK enables you to integrate enterprise features quickly:
+
+<CardGroup cols={2}>
+  <Card title="Single Sign-On (SSO)" icon="key" href="/api/sso">
+    Connect to any identity provider with SAML or OAuth 2.0
+  </Card>
+  
+  <Card title="User Management" icon="users" href="/api/user-management">
+    Complete authentication system with AuthKit
+  </Card>
+  
+  <Card title="Directory Sync" icon="arrows-rotate" href="/api/directory-sync">
+    Sync user directories from identity providers
+  </Card>
+  
+  <Card title="Admin Portal" icon="gauge" href="/api/portal">
+    Self-serve configuration for enterprise customers
+  </Card>
+  
+  <Card title="Audit Logs" icon="list" href="/api/audit-logs">
+    Enterprise-grade audit trail for compliance
+  </Card>
+  
+  <Card title="Multi-Factor Auth" icon="shield" href="/api/mfa">
+    Add MFA to your authentication flows
+  </Card>
+  
+  <Card title="Fine-Grained Authorization" icon="lock" href="/api/authorization">
+    Implement advanced permission systems
+  </Card>
+  
+  <Card title="Organizations" icon="building" href="/api/organizations">
+    Manage multi-tenant organizations
+  </Card>
+</CardGroup>
+
+## Requirements
+
+<Note>
+  Node.js 20.15.0 or higher is required to use this SDK.
+</Note>
+
+The SDK supports multiple JavaScript runtimes:
+
+- **Node.js** - 20.15.0+
+- **Bun** - Full support
+- **Deno** - Full support
+- **Edge runtimes** - Cloudflare Workers, Vercel Edge, etc.
+
+## Public client mode
+
+For applications that cannot securely store secrets (browser apps, mobile apps, CLI tools), the SDK supports PKCE-based authentication:
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+// Initialize with only a client ID (no API key needed)
+const workos = new WorkOS({ clientId: 'client_...' });
+
+// Generate auth URL with automatic PKCE
+const { url, codeVerifier } = await workos.userManagement.getAuthorizationUrlWithPKCE({
+  provider: 'authkit',
+  redirectUri: 'myapp://callback',
+  clientId: 'client_...',
+});
+
+// After user authenticates, exchange code for tokens
+const { accessToken, refreshToken } = await workos.userManagement.authenticateWithCode({
+  code: authorizationCode,
+  codeVerifier,
+  clientId: 'client_...',
+});
+```
+
+<Warning>
+  Store the `codeVerifier` securely on-device between generating the auth URL and handling the callback. For mobile apps, use platform secure storage (iOS Keychain, Android Keystore).
+</Warning>
+
+## Getting started
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install the SDK using your preferred package manager
+  </Card>
+  
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get up and running with a simple example
+  </Card>
+  
+  <Card title="Configuration" icon="gear" href="/configuration">
+    Configure the WorkOS client for your application
+  </Card>
+</CardGroup>
+
+## SDK versioning
+
+WorkOS follows Semantic Versioning (SemVer) for all SDK releases:
+
+- **Major versions** (X.0.0) - Breaking changes
+- **Minor versions** (0.X.0) - New features, backward compatible
+- **Patch versions** (0.0.X) - Bug fixes
+
+<Tip>
+  Always read the changelog before making major version upgrades to understand breaking changes.
+</Tip>
+
+## Support
+
+Need help? Here are some resources:
+
+- **Documentation** - [workos.com/docs](https://workos.com/docs)
+- **API Reference** - [workos.com/docs/reference](https://workos.com/docs/reference)
+- **GitHub Issues** - [github.com/workos/workos-node/issues](https://github.com/workos/workos-node/issues)
+- **Support** - Contact our team at support@workos.com

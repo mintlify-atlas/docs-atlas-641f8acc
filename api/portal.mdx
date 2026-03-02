@@ -1,0 +1,162 @@
+---
+title: 'Portal'
+description: 'Generate secure links to the WorkOS Admin Portal for self-service configuration'
+---
+
+## Overview
+
+The Portal API allows you to generate secure, time-limited links that give your customers access to the WorkOS Admin Portal. This enables self-service configuration of SSO, Directory Sync, Domain Verification, and other enterprise features.
+
+## Methods
+
+### generateLink
+
+Generates a one-time-use Admin Portal link for an organization.
+
+<ParamField path="options" type="object" required>
+  Configuration for the portal link
+  
+  <Expandable title="properties">
+    <ParamField path="intent" type="GeneratePortalLinkIntent" required>
+      The specific Admin Portal feature to access
+      
+      **Options:**
+      - `audit_logs` - Audit Logs configuration
+      - `domain_verification` - Domain verification management
+      - `dsync` - Directory Sync setup
+      - `log_streams` - Log Streams configuration
+      - `sso` - Single Sign-On setup
+      - `certificate_renewal` - Certificate renewal for SSO
+      - `bring_your_own_key` - BYOK (Bring Your Own Key) configuration
+    </ParamField>
+    
+    <ParamField path="organization" type="string" required>
+      The ID of the organization to generate the portal link for
+    </ParamField>
+    
+    <ParamField path="returnUrl" type="string">
+      URL to redirect the user after they complete their portal session or click the return button
+    </ParamField>
+    
+    <ParamField path="successUrl" type="string">
+      URL to redirect the user after successful completion of the portal intent
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="response" type="object">
+  Portal link response
+  
+  <Expandable title="properties">
+    <ResponseField name="link" type="string">
+      The secure, one-time-use URL to the Admin Portal
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+#### Example - SSO Configuration
+
+```typescript
+import { WorkOS, GeneratePortalLinkIntent } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_example_123456789');
+
+const { link } = await workos.portal.generateLink({
+  intent: GeneratePortalLinkIntent.SSO,
+  organization: 'org_01H8Z9Q2Z3Y4X5W6V7U8T9S0R1',
+  returnUrl: 'https://yourapp.com/settings',
+  successUrl: 'https://yourapp.com/settings/sso/success',
+});
+
+// Redirect the user to the portal link
+console.log(link);
+// https://id.workos.com/portal/launch?token=...
+```
+
+#### Example - Directory Sync
+
+```typescript
+const { link } = await workos.portal.generateLink({
+  intent: GeneratePortalLinkIntent.DSync,
+  organization: 'org_01H8Z9Q2Z3Y4X5W6V7U8T9S0R1',
+  returnUrl: 'https://yourapp.com/settings',
+});
+
+// Send this link to your customer or redirect them to it
+```
+
+#### Example - Domain Verification
+
+```typescript
+const { link } = await workos.portal.generateLink({
+  intent: GeneratePortalLinkIntent.DomainVerification,
+  organization: 'org_01H8Z9Q2Z3Y4X5W6V7U8T9S0R1',
+  returnUrl: 'https://yourapp.com/settings/domains',
+});
+```
+
+## Available Intents
+
+<AccordionGroup>
+  <Accordion title="audit_logs" icon="clipboard-list">
+    Allows organizations to configure Audit Logs settings and export preferences.
+  </Accordion>
+  
+  <Accordion title="domain_verification" icon="shield-check">
+    Enables domain verification for email-based SSO discovery and organization membership.
+  </Accordion>
+  
+  <Accordion title="dsync" icon="rotate">
+    Provides setup and configuration for Directory Sync integrations (Azure AD, Okta, Google Workspace, etc.).
+  </Accordion>
+  
+  <Accordion title="log_streams" icon="stream">
+    Configures real-time log streaming to external services.
+  </Accordion>
+  
+  <Accordion title="sso" icon="key">
+    Allows organizations to set up SAML or OIDC Single Sign-On connections.
+  </Accordion>
+  
+  <Accordion title="certificate_renewal" icon="certificate">
+    Facilitates renewal of SSO certificates before they expire.
+  </Accordion>
+  
+  <Accordion title="bring_your_own_key" icon="key-skeleton">
+    Enables customers to use their own encryption keys for data security.
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<Tip>
+  Portal links are **one-time-use** and expire after 5 minutes if not used. Generate a new link each time a user needs to access the portal.
+</Tip>
+
+<Warning>
+  Always validate that the user has permission to access the organization's settings before generating a portal link.
+</Warning>
+
+<Note>
+  Use `returnUrl` to redirect users back to your application after they finish or exit the portal. Use `successUrl` to redirect them after successful completion of a specific configuration task.
+</Note>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="SSO" icon="key" href="/api/sso">
+    Configure SSO connections programmatically
+  </Card>
+  
+  <Card title="Organizations" icon="building" href="/api/organizations">
+    Manage organizations and their settings
+  </Card>
+  
+  <Card title="Directory Sync" icon="rotate" href="/api/directory-sync">
+    Work with Directory Sync data and connections
+  </Card>
+  
+  <Card title="Audit Logs" icon="clipboard-list" href="/api/audit-logs">
+    Manage audit log events
+  </Card>
+</CardGroup>

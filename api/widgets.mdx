@@ -1,0 +1,173 @@
+---
+title: 'Widgets'
+description: 'Generate secure tokens for embedded WorkOS UI widgets'
+---
+
+## Overview
+
+The Widgets API allows you to embed WorkOS UI components directly into your application. By generating secure, scoped tokens, you can provide self-service capabilities to your users without redirecting them to external pages.
+
+## Methods
+
+### getToken
+
+Generates a secure token for rendering WorkOS widgets in your application.
+
+<ParamField path="payload" type="GetTokenOptions" required>
+  Token generation options
+  
+  <Expandable title="properties">
+    <ParamField path="organizationId" type="string" required>
+      The ID of the organization the widget will be scoped to
+    </ParamField>
+    
+    <ParamField path="userId" type="string">
+      The ID of the user viewing the widget (optional, depending on widget type)
+    </ParamField>
+    
+    <ParamField path="scopes" type="WidgetScope[]">
+      Array of permission scopes for the widget
+      
+      **Available scopes:**
+      - `widgets:users-table:manage` - Manage users in the organization
+      - `widgets:sso:manage` - Configure SSO settings
+      - `widgets:domain-verification:manage` - Manage domain verification
+      - `widgets:dsync:manage` - Configure Directory Sync
+      - `widgets:api-keys:manage` - Manage API keys
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="token" type="string">
+  A secure JWT token to be used with WorkOS widget components
+</ResponseField>
+
+#### Example - Users Table Widget
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_example_123456789');
+
+const token = await workos.widgets.getToken({
+  organizationId: 'org_01H8Z9Q2Z3Y4X5W6V7U8T9S0R1',
+  userId: 'user_01H8Z9Q2Z3Y4X5W6V7U8T9S0R1',
+  scopes: ['widgets:users-table:manage'],
+});
+
+// Pass this token to your frontend
+res.json({ widgetToken: token });
+```
+
+#### Example - SSO Configuration Widget
+
+```typescript
+const token = await workos.widgets.getToken({
+  organizationId: 'org_01H8Z9Q2Z3Y4X5W6V7U8T9S0R1',
+  scopes: ['widgets:sso:manage'],
+});
+```
+
+#### Example - Multiple Scopes
+
+```typescript
+const token = await workos.widgets.getToken({
+  organizationId: 'org_01H8Z9Q2Z3Y4X5W6V7U8T9S0R1',
+  scopes: [
+    'widgets:users-table:manage',
+    'widgets:sso:manage',
+    'widgets:domain-verification:manage',
+  ],
+});
+```
+
+## Widget Scopes
+
+<AccordionGroup>
+  <Accordion title="widgets:users-table:manage" icon="users">
+    Provides access to a user management table widget that allows viewing, inviting, and managing users within an organization.
+  </Accordion>
+  
+  <Accordion title="widgets:sso:manage" icon="key">
+    Enables an embedded SSO configuration widget for setting up and managing Single Sign-On connections.
+  </Accordion>
+  
+  <Accordion title="widgets:domain-verification:manage" icon="shield-check">
+    Allows domain verification management through an embedded widget interface.
+  </Accordion>
+  
+  <Accordion title="widgets:dsync:manage" icon="rotate">
+    Provides an embedded Directory Sync configuration and management interface.
+  </Accordion>
+  
+  <Accordion title="widgets:api-keys:manage" icon="key-skeleton">
+    Enables API key management capabilities within your application interface.
+  </Accordion>
+</AccordionGroup>
+
+## Frontend Integration
+
+Once you generate a token on your backend, pass it to your frontend to initialize WorkOS widgets:
+
+```javascript
+// Example frontend integration
+import { WorkOSWidget } from '@workos-inc/widget';
+
+// Fetch token from your backend
+const response = await fetch('/api/widget-token');
+const { widgetToken } = await response.json();
+
+// Initialize the widget
+const widget = new WorkOSWidget({
+  token: widgetToken,
+  container: '#widget-container',
+});
+
+widget.render();
+```
+
+## Security Considerations
+
+<Warning>
+  Never expose your WorkOS API key to the frontend. Always generate tokens on your backend server.
+</Warning>
+
+<Tip>
+  Tokens are short-lived and scoped to specific organizations and permissions. Generate a new token each time a user loads a page with a widget.
+</Tip>
+
+<Note>
+  The `userId` parameter is optional but recommended for widgets that need to associate actions with specific users, such as the users table widget.
+</Note>
+
+## Benefits of Widgets
+
+<CardGroup cols={2}>
+  <Card title="Embedded Experience" icon="window">
+    Keep users in your application without redirects to external portals
+  </Card>
+  
+  <Card title="Customizable" icon="palette">
+    Widgets inherit your application's styling and branding
+  </Card>
+  
+  <Card title="Secure" icon="lock">
+    Scoped tokens ensure users only access permitted resources
+  </Card>
+  
+  <Card title="Maintained by WorkOS" icon="rotate">
+    Automatically updated with new features and security improvements
+  </Card>
+</CardGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Portal" icon="arrow-up-right-from-square" href="/api/portal">
+    Generate links to the full Admin Portal experience
+  </Card>
+  
+  <Card title="Organizations" icon="building" href="/api/organizations">
+    Manage organizations programmatically
+  </Card>
+</CardGroup>

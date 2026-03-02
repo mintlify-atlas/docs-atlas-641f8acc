@@ -1,0 +1,348 @@
+---
+title: 'Actions'
+description: 'Intercept and control authentication and user registration flows'
+---
+
+## Overview
+
+The Actions API enables you to implement custom business logic during critical authentication and user registration events. You can approve, deny, or modify these flows in real-time based on your application's requirements.
+
+<Info>
+  Actions work through webhooks. WorkOS sends action requests to your endpoint, you process them, and return a signed response to approve or deny the action.
+</Info>
+
+## Methods
+
+### constructAction
+
+Verifies and constructs an action context from an incoming webhook payload.
+
+<ParamField path="options" type="object" required>
+  Options for constructing and verifying the action
+  
+  <Expandable title="properties">
+    <ParamField path="payload" type="unknown" required>
+      The raw webhook payload received from WorkOS
+    </ParamField>
+    
+    <ParamField path="sigHeader" type="string" required>
+      The `WorkOS-Signature` header from the webhook request
+    </ParamField>
+    
+    <ParamField path="secret" type="string" required>
+      Your webhook secret for verifying the signature
+    </ParamField>
+    
+    <ParamField path="tolerance" type="number">
+      Time tolerance in milliseconds for timestamp verification (default: 30000)
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="ActionContext" type="object">
+  The verified action context
+  
+  <Expandable title="Authentication Action">
+    <ResponseField name="id" type="string">
+      Unique identifier for the action
+    </ResponseField>
+    
+    <ResponseField name="object" type="'authentication_action_context'">
+      Object type identifier
+    </ResponseField>
+    
+    <ResponseField name="user" type="User">
+      The user attempting to authenticate
+    </ResponseField>
+    
+    <ResponseField name="organization" type="Organization">
+      The organization the user is authenticating into (if applicable)
+    </ResponseField>
+    
+    <ResponseField name="organizationMembership" type="OrganizationMembership">
+      The user's membership in the organization (if applicable)
+    </ResponseField>
+    
+    <ResponseField name="ipAddress" type="string">
+      IP address of the authentication attempt
+    </ResponseField>
+    
+    <ResponseField name="userAgent" type="string">
+      User agent string from the authentication request
+    </ResponseField>
+    
+    <ResponseField name="deviceFingerprint" type="string">
+      Unique device identifier
+    </ResponseField>
+  </Expandable>
+  
+  <Expandable title="User Registration Action">
+    <ResponseField name="id" type="string">
+      Unique identifier for the action
+    </ResponseField>
+    
+    <ResponseField name="object" type="'user_registration_action_context'">
+      Object type identifier
+    </ResponseField>
+    
+    <ResponseField name="userData" type="object">
+      Data about the user being registered
+      
+      - `email` - User's email address
+      - `firstName` - User's first name
+      - `lastName` - User's last name
+    </ResponseField>
+    
+    <ResponseField name="invitation" type="Invitation">
+      The invitation used for registration (if applicable)
+    </ResponseField>
+    
+    <ResponseField name="ipAddress" type="string">
+      IP address of the registration attempt
+    </ResponseField>
+    
+    <ResponseField name="userAgent" type="string">
+      User agent string from the registration request
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+#### Example
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+import express from 'express';
+
+const app = express();
+const workos = new WorkOS('sk_example_123456789');
+
+app.post('/actions/authentication', express.raw({ type: 'application/json' }), async (req, res) => {
+  const signature = req.headers['workos-signature'] as string;
+  const secret = 'wh_secret_123456789';
+  
+  try {
+    const action = await workos.actions.constructAction({
+      payload: JSON.parse(req.body.toString()),
+      sigHeader: signature,
+      secret,
+      tolerance: 30000,
+    });
+    
+    // Process the action based on type
+    if (action.object === 'authentication_action_context') {
+      console.log('User attempting to sign in:', action.user.email);
+      // Add your custom logic here
+    }
+  } catch (error) {
+    console.error('Invalid action signature:', error);
+    return res.status(400).send('Invalid signature');
+  }
+});
+```
+
+---
+
+### signResponse
+
+Creates a signed response to approve or deny an action.
+
+<ParamField path="data" type="AuthenticationActionResponseData | UserRegistrationActionResponseData" required>
+  The response data to sign
+  
+  <Expandable title="properties">
+    <ParamField path="type" type="'authentication' | 'user_registration'" required>
+      The type of action being responded to
+    </ParamField>
+    
+    <ParamField path="verdict" type="'Allow' | 'Deny'" required>
+      Whether to allow or deny the action
+    </ParamField>
+    
+    <ParamField path="errorMessage" type="string">
+      Error message to display to the user if verdict is 'Deny'
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="secret" type="string" required>
+  Your webhook secret for signing the response
+</ParamField>
+
+<ResponseField name="response" type="object">
+  The signed response object
+  
+  <Expandable title="properties">
+    <ResponseField name="object" type="string">
+      Response type identifier
+    </ResponseField>
+    
+    <ResponseField name="payload" type="object">
+      The response payload with timestamp and verdict
+    </ResponseField>
+    
+    <ResponseField name="signature" type="string">
+      HMAC signature for verification
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+#### Example - Allow Authentication
+
+```typescript
+const response = await workos.actions.signResponse(
+  {
+    type: 'authentication',
+    verdict: 'Allow',
+  },
+  'wh_secret_123456789',
+);
+
+res.json(response);
+```
+
+#### Example - Deny Authentication
+
+```typescript
+const response = await workos.actions.signResponse(
+  {
+    type: 'authentication',
+    verdict: 'Deny',
+    errorMessage: 'Your account has been suspended. Please contact support.',
+  },
+  'wh_secret_123456789',
+);
+
+res.json(response);
+```
+
+#### Example - Conditional Logic
+
+```typescript
+app.post('/actions/authentication', express.raw({ type: 'application/json' }), async (req, res) => {
+  const signature = req.headers['workos-signature'] as string;
+  const secret = 'wh_secret_123456789';
+  
+  const action = await workos.actions.constructAction({
+    payload: JSON.parse(req.body.toString()),
+    sigHeader: signature,
+    secret,
+  });
+  
+  // Example: Block authentication from specific IP ranges
+  const blockedIpRanges = ['192.168.1.', '10.0.0.'];
+  const isBlockedIp = blockedIpRanges.some(range => 
+    action.ipAddress?.startsWith(range)
+  );
+  
+  const response = await workos.actions.signResponse(
+    {
+      type: 'authentication',
+      verdict: isBlockedIp ? 'Deny' : 'Allow',
+      errorMessage: isBlockedIp 
+        ? 'Authentication from this network is not permitted.'
+        : undefined,
+    },
+    secret,
+  );
+  
+  res.json(response);
+});
+```
+
+---
+
+### verifyHeader
+
+Verifies the signature of an incoming webhook request. This method is available as a standalone utility.
+
+<ParamField path="options" type="object" required>
+  Verification options
+  
+  <Expandable title="properties">
+    <ParamField path="payload" type="unknown" required>
+      The webhook payload
+    </ParamField>
+    
+    <ParamField path="sigHeader" type="string" required>
+      The `WorkOS-Signature` header
+    </ParamField>
+    
+    <ParamField path="secret" type="string" required>
+      Your webhook secret
+    </ParamField>
+    
+    <ParamField path="tolerance" type="number">
+      Time tolerance in milliseconds (default: 30000)
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+#### Example
+
+```typescript
+try {
+  await workos.actions.verifyHeader({
+    payload: req.body,
+    sigHeader: req.headers['workos-signature'] as string,
+    secret: 'wh_secret_123456789',
+    tolerance: 30000,
+  });
+  console.log('Signature verified');
+} catch (error) {
+  console.error('Invalid signature');
+}
+```
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="IP Allowlisting" icon="shield-check">
+    Restrict authentication to specific IP addresses or networks
+  </Card>
+  
+  <Card title="Email Domain Validation" icon="at">
+    Ensure users register with approved email domains
+  </Card>
+  
+  <Card title="Account Suspension" icon="ban">
+    Prevent suspended users from authenticating
+  </Card>
+  
+  <Card title="Custom Onboarding" icon="user-plus">
+    Add users to external systems during registration
+  </Card>
+  
+  <Card title="Fraud Prevention" icon="shield">
+    Block suspicious registration patterns or device fingerprints
+  </Card>
+  
+  <Card title="Conditional Access" icon="key">
+    Implement time-based or location-based access controls
+  </Card>
+</CardGroup>
+
+## Best Practices
+
+<Tip>
+  Always verify webhook signatures using `constructAction` or `verifyHeader` before processing action requests.
+</Tip>
+
+<Warning>
+  Actions must respond within **3 seconds**. Implement async processing for time-consuming operations and return a cached or default response immediately.
+</Warning>
+
+<Note>
+  When denying an action, provide clear `errorMessage` text to help users understand why their request was denied and what they can do to resolve it.
+</Note>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Webhooks" icon="webhook" href="/api/webhooks">
+    Configure webhook endpoints for Actions
+  </Card>
+  
+  <Card title="User Management" icon="users" href="/api/user-management">
+    Manage users and authentication
+  </Card>
+</CardGroup>

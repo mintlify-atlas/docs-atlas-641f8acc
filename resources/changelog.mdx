@@ -1,0 +1,137 @@
+---
+title: Changelog
+description: Version history and release notes for the WorkOS Node SDK
+---
+
+This page tracks all notable changes to the WorkOS Node SDK. The SDK follows [Semantic Versioning](https://semver.org/).
+
+<Note>
+  For migration guides between major versions, see the [Migration Guide](/resources/migration-guide).
+</Note>
+
+## Version 8.7.0
+
+**Released:** February 26, 2026
+
+### Features
+
+- Added `resourceTypeSlug` to permissions, environment and organization roles ([#1502](https://github.com/workos/workos-node/issues/1502))
+- Added deserialization support for feature flag events ([#1494](https://github.com/workos/workos-node/issues/1494))
+
+### Bug Fixes
+
+- Updated release-please manifest to match actual version 8.6.0 ([#1503](https://github.com/workos/workos-node/issues/1503))
+
+## Version 8.6.0
+
+Previous stable release.
+
+## Version 8.0.0
+
+**Major Release** - Universal Runtime Support & API Modernization
+
+### Highlights
+
+- **Universal runtime compatibility** - Works seamlessly across Node.js, Deno, Bun, and Cloudflare Workers
+- **PKCE authentication support** - Full support for public clients (mobile, CLI, browser apps)
+- **API modernization** - Removed deprecated methods and improved type safety
+- **Node.js 20+ required** - Updated minimum Node version from 16 to 20
+
+### Breaking Changes
+
+<Warning>
+  This is a major version release with breaking changes. See the [Migration Guide](/resources/migration-guide) for detailed upgrade instructions.
+</Warning>
+
+#### Runtime Requirements
+
+- Minimum Node.js version increased from 16 to 20
+- Package is now ESM-first with dual CJS/ESM exports
+
+#### Directory Sync
+
+- Removed `emails`, `username`, and `jobTitle` fields from `DirectoryUser` interface
+- Use `customAttributes` instead
+
+#### User Management
+
+- Removed `context` field from `AuthorizationURLOptions`
+- Removed deprecated methods: `sendMagicAuthCode()`, `sendPasswordResetEmail()`, `refreshAndSealSessionData()`
+- `listOrganizationMemberships()` now requires either `userId` or `organizationId`
+
+#### SSO
+
+- `SSOAuthorizationURLOptions` converted to discriminated union
+- Removed `domain` field (deprecated)
+
+#### MFA
+
+- Removed `verifyFactor()` method - use `verifyChallenge()` instead
+
+#### Organizations
+
+- Removed `allowProfilesOutsideOrganization` and `domains` fields
+- Use `domainData` instead of `domains`
+
+#### Vault
+
+- Removed all `*Secret` method aliases - use `*Object` methods instead
+
+#### Events
+
+- Removed `dsync.deactivated` event type - use `dsync.deleted` instead
+
+### New Features
+
+- **PKCE authentication** - Support for public clients without API keys
+- **`createWorkOS()` factory function** - Compile-time type safety for client modes
+- **Enhanced runtime support** - Better Deno, Bun, and Cloudflare Workers compatibility
+
+## Version History
+
+For the complete version history, see the [GitHub releases page](https://github.com/workos/workos-node/releases).
+
+## Versioning Policy
+
+WorkOS follows [Semantic Versioning](https://semver.org/) for all SDKs:
+
+- **Major versions (X.0.0)** - Breaking changes that require code updates
+- **Minor versions (X.Y.0)** - New features, backwards compatible
+- **Patch versions (X.Y.Z)** - Bug fixes, backwards compatible
+
+<Info>
+  We strongly recommend reading the changelog before upgrading to any major version.
+</Info>
+
+## Beta Releases
+
+WorkOS occasionally releases beta versions for new features. Beta releases:
+
+- May contain breaking changes between versions
+- Should be pinned to specific versions in production
+- Are indicated by `-beta` or `-rc` version suffixes
+
+To install a beta version:
+
+```bash
+npm install @workos-inc/node@8.0.0-beta.1
+```
+
+<Warning>
+  Beta versions are not recommended for production use. Pin to specific versions to avoid unexpected breaking changes.
+</Warning>
+
+## Release Notifications
+
+Stay updated on new releases:
+
+- Watch the [GitHub repository](https://github.com/workos/workos-node)
+- Subscribe to [npm package updates](https://www.npmjs.com/package/@workos-inc/node)
+- Follow [@WorkOS on Twitter](https://twitter.com/workos)
+
+## Report Issues
+
+Found a bug or have a feature request?
+
+- [Open an issue on GitHub](https://github.com/workos/workos-node/issues)
+- Contact [support@workos.com](mailto:support@workos.com)

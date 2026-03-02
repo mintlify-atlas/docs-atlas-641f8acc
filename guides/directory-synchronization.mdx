@@ -1,0 +1,413 @@
+---
+title: Directory Synchronization
+description: Sync users and groups from identity providers using WorkOS Directory Sync
+---
+
+This guide covers working with Directory Sync to automatically synchronize users, groups, and organizational data from identity providers like Okta, Azure AD, and Google Workspace.
+
+## Prerequisites
+
+```bash
+npm install @workos-inc/node
+```
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+```
+
+## Understanding Directory Sync
+
+Directory Sync automatically provisions users and groups from your customers' identity providers into your application. When users are added, updated, or removed in the IdP, those changes are reflected in WorkOS.
+
+## Working with Directories
+
+<Steps>
+  <Step title="List Directories">
+    List all directories for an organization:
+
+    ```typescript
+    const directories = await workos.directorySync.listDirectories({
+      organizationId: 'org_123'
+    });
+
+    for await (const directory of directories.autoPagination()) {
+      console.log(directory.id);              // directory_123
+      console.log(directory.name);            // Acme Corp Directory
+      console.log(directory.type);            // okta scim v2.0
+      console.log(directory.state);           // active
+      console.log(directory.organizationId);  // org_123
+      console.log(directory.domain);          // acme.com
+    }
+    ```
+  </Step>
+
+  <Step title="Get a Directory">
+    Retrieve a specific directory:
+
+    ```typescript
+    const directory = await workos.directorySync.getDirectory('directory_123');
+
+    console.log(directory.name);
+    console.log(directory.type);            // okta scim v2.0, azure scim v2.0
+    console.log(directory.state);           // active, deleting, invalid_credentials
+    console.log(directory.externalKey);     // IdP-specific identifier
+    console.log(directory.createdAt);
+    console.log(directory.updatedAt);
+    ```
+  </Step>
+
+  <Step title="Delete a Directory">
+    Delete a directory:
+
+    ```typescript
+    await workos.directorySync.deleteDirectory('directory_123');
+    ```
+  </Step>
+</Steps>
+
+## Working with Directory Users
+
+<Steps>
+  <Step title="List Directory Users">
+    List all users from a directory:
+
+    ```typescript
+    const users = await workos.directorySync.listUsers({
+      directory: 'directory_123'
+    });
+
+    for await (const user of users.autoPagination()) {
+      console.log(user.id);              // directory_user_123
+      console.log(user.email);           // user@acme.com
+      console.log(user.firstName);       // John
+      console.log(user.lastName);        // Doe
+      console.log(user.state);           // active
+      console.log(user.directoryId);     // directory_123
+      console.log(user.organizationId);  // org_123
+      console.log(user.groups);          // Array of groups
+    }
+    ```
+
+    Filter by group:
+
+    ```typescript
+    const users = await workos.directorySync.listUsers({
+      group: 'directory_group_123'
+    });
+    ```
+  </Step>
+
+  <Step title="Get a Directory User">
+    Retrieve a specific user:
+
+    ```typescript
+    const user = await workos.directorySync.getUser('directory_user_123');
+
+    console.log(user.email);
+    console.log(user.firstName);
+    console.log(user.lastName);
+    console.log(user.idpId);           // IdP-specific user ID
+    console.log(user.rawAttributes);   // Full IdP attributes
+    console.log(user.customAttributes); // Parsed custom attributes
+    ```
+  </Step>
+
+  <Step title="Access Custom Attributes">
+    Type-safe access to custom attributes:
+
+    ```typescript
+    interface CustomAttributes {
+      managerId: string;
+      department: string;
+      employeeId: string;
+    }
+
+    const users = await workos.directorySync.listUsers<CustomAttributes>({
+      directory: 'directory_123'
+    });
+
+    for await (const user of users.autoPagination()) {
+      console.log(user.customAttributes.managerId);
+      console.log(user.customAttributes.department);
+      console.log(user.customAttributes.employeeId);
+    }
+    ```
+  </Step>
+</Steps>
+
+## Working with Directory Groups
+
+<Steps>
+  <Step title="List Directory Groups">
+    List all groups in a directory:
+
+    ```typescript
+    const groups = await workos.directorySync.listGroups({
+      directory: 'directory_123'
+    });
+
+    for await (const group of groups.autoPagination()) {
+      console.log(group.id);              // directory_group_123
+      console.log(group.name);            // Engineering
+      console.log(group.directoryId);     // directory_123
+      console.log(group.organizationId);  // org_123
+      console.log(group.idpId);           // IdP-specific group ID
+      console.log(group.rawAttributes);   // Full IdP attributes
+    }
+    ```
+
+    List groups for a specific user:
+
+    ```typescript
+    const groups = await workos.directorySync.listGroups({
+      user: 'directory_user_123'
+    });
+    ```
+  </Step>
+
+  <Step title="Get a Directory Group">
+    Retrieve a specific group:
+
+    ```typescript
+    const group = await workos.directorySync.getGroup('directory_group_123');
+
+    console.log(group.name);
+    console.log(group.idpId);
+    console.log(group.createdAt);
+    console.log(group.updatedAt);
+    ```
+  </Step>
+</Steps>
+
+## User Groups and Membership
+
+Access group information for users:
+
+```typescript
+const user = await workos.directorySync.getUser('directory_user_123');
+
+// Groups are included with the user
+user.groups.forEach(group => {
+  console.log(group.id);
+  console.log(group.name);
+  console.log(group.directoryId);
+});
+```
+
+List users in a specific group:
+
+```typescript
+const users = await workos.directorySync.listUsers({
+  group: 'directory_group_123'
+});
+
+for await (const user of users.autoPagination()) {
+  console.log(`${user.firstName} ${user.lastName} is in this group`);
+}
+```
+
+## User Roles
+
+Some directories include role information:
+
+```typescript
+const user = await workos.directorySync.getUser('directory_user_123');
+
+if (user.role) {
+  console.log('Primary role:', user.role.slug);
+}
+
+if (user.roles) {
+  user.roles.forEach(role => {
+    console.log('Role:', role.slug);
+  });
+}
+```
+
+## Handling Directory Events with Webhooks
+
+Directory Sync sends webhooks for user and group changes. See the [Handling Webhooks](/guides/handling-webhooks) guide for details on webhook verification.
+
+Common directory sync events:
+
+- `dsync.user.created` - New user added
+- `dsync.user.updated` - User details changed
+- `dsync.user.deleted` - User removed
+- `dsync.group.created` - New group added
+- `dsync.group.updated` - Group details changed
+- `dsync.group.deleted` - Group removed
+- `dsync.group.user_added` - User added to group
+- `dsync.group.user_removed` - User removed from group
+
+```typescript
+app.post('/webhooks/workos', async (req, res) => {
+  const webhook = await workos.webhooks.constructEvent({
+    payload: req.body,
+    sigHeader: req.headers['workos-signature'],
+    secret: process.env.WORKOS_WEBHOOK_SECRET
+  });
+
+  switch (webhook.event) {
+    case 'dsync.user.created':
+      console.log('New user:', webhook.data.email);
+      // Provision user in your application
+      break;
+
+    case 'dsync.user.updated':
+      console.log('User updated:', webhook.data.email);
+      // Update user in your application
+      break;
+
+    case 'dsync.user.deleted':
+      console.log('User deleted:', webhook.data.id);
+      // Deprovision user in your application
+      break;
+
+    case 'dsync.group.user_added':
+      console.log('User added to group');
+      // Update group membership
+      break;
+  }
+
+  res.sendStatus(200);
+});
+```
+
+## Syncing Users to Your Application
+
+Typical pattern for syncing directory users:
+
+```typescript
+async function syncDirectoryUsers(directoryId: string) {
+  const users = await workos.directorySync.listUsers({
+    directory: directoryId
+  });
+
+  for await (const directoryUser of users.autoPagination()) {
+    // Check if user exists in your database
+    const existingUser = await db.users.findOne({
+      directoryUserId: directoryUser.id
+    });
+
+    if (existingUser) {
+      // Update existing user
+      await db.users.update(existingUser.id, {
+        email: directoryUser.email,
+        firstName: directoryUser.firstName,
+        lastName: directoryUser.lastName,
+        active: directoryUser.state === 'active',
+        groups: directoryUser.groups.map(g => g.name)
+      });
+    } else {
+      // Create new user
+      await db.users.create({
+        directoryUserId: directoryUser.id,
+        email: directoryUser.email,
+        firstName: directoryUser.firstName,
+        lastName: directoryUser.lastName,
+        active: directoryUser.state === 'active',
+        organizationId: directoryUser.organizationId,
+        groups: directoryUser.groups.map(g => g.name)
+      });
+    }
+  }
+}
+```
+
+## Complete Example
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+import express from 'express';
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+const app = express();
+app.use(express.json());
+
+// List all directories for an organization
+app.get('/api/organizations/:orgId/directories', async (req, res) => {
+  const directories = await workos.directorySync.listDirectories({
+    organizationId: req.params.orgId
+  });
+
+  res.json({ directories: directories.data });
+});
+
+// Get users from a directory
+app.get('/api/directories/:directoryId/users', async (req, res) => {
+  const users = await workos.directorySync.listUsers({
+    directory: req.params.directoryId
+  });
+
+  const userList = [];
+  for await (const user of users.autoPagination()) {
+    userList.push({
+      id: user.id,
+      email: user.email,
+      name: `${user.firstName} ${user.lastName}`,
+      groups: user.groups.map(g => g.name),
+      state: user.state
+    });
+  }
+
+  res.json({ users: userList });
+});
+
+// Get groups from a directory
+app.get('/api/directories/:directoryId/groups', async (req, res) => {
+  const groups = await workos.directorySync.listGroups({
+    directory: req.params.directoryId
+  });
+
+  const groupList = [];
+  for await (const group of groups.autoPagination()) {
+    groupList.push({
+      id: group.id,
+      name: group.name,
+      directoryId: group.directoryId
+    });
+  }
+
+  res.json({ groups: groupList });
+});
+
+// Handle directory sync webhooks
+app.post('/webhooks/dsync', async (req, res) => {
+  try {
+    const webhook = await workos.webhooks.constructEvent({
+      payload: req.body,
+      sigHeader: req.headers['workos-signature'] as string,
+      secret: process.env.WORKOS_WEBHOOK_SECRET
+    });
+
+    console.log('Directory sync event:', webhook.event);
+
+    switch (webhook.event) {
+      case 'dsync.user.created':
+      case 'dsync.user.updated':
+        // Sync user to your database
+        await syncUser(webhook.data);
+        break;
+
+      case 'dsync.user.deleted':
+        // Remove or deactivate user
+        await deactivateUser(webhook.data.id);
+        break;
+
+      case 'dsync.group.user_added':
+        // Update group membership
+        await addUserToGroup(webhook.data);
+        break;
+    }
+
+    res.sendStatus(200);
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.sendStatus(400);
+  }
+});
+
+app.listen(3000);
+```

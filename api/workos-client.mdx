@@ -1,0 +1,565 @@
+---
+title: WorkOS Client
+description: The main WorkOS client class for interacting with the WorkOS API
+---
+
+## Constructor
+
+Create a new WorkOS client instance.
+
+```typescript
+new WorkOS(keyOrOptions?: string | WorkOSOptions, maybeOptions?: WorkOSOptions)
+```
+
+### Parameters
+
+<ParamField path="keyOrOptions" type="string | WorkOSOptions">
+  Either an API key string or a WorkOSOptions object. When using server-side authentication, you can pass the API key directly as a string. For PKCE/public clients or additional configuration, pass a WorkOSOptions object.
+</ParamField>
+
+<ParamField path="maybeOptions" type="WorkOSOptions">
+  Additional options when the first parameter is an API key string.
+</ParamField>
+
+### WorkOSOptions
+
+<ParamField path="apiKey" type="string">
+  Your WorkOS API key (starts with `sk_`). Required for server-side operations. If not provided, the SDK will attempt to read from the `WORKOS_API_KEY` environment variable.
+</ParamField>
+
+<ParamField path="clientId" type="string">
+  Your WorkOS Client ID. Required for PKCE/public clients and certain authentication flows. If not provided, the SDK will attempt to read from the `WORKOS_CLIENT_ID` environment variable.
+</ParamField>
+
+<ParamField path="apiHostname" type="string" default="api.workos.com">
+  The API hostname to use. Override this for testing or custom environments.
+</ParamField>
+
+<ParamField path="https" type="boolean" default={true}>
+  Whether to use HTTPS for API requests.
+</ParamField>
+
+<ParamField path="port" type="number">
+  Optional port number to use for API requests.
+</ParamField>
+
+<ParamField path="timeout" type="number">
+  Request timeout in milliseconds.
+</ParamField>
+
+<ParamField path="config" type="RequestInit">
+  Additional configuration options for the underlying fetch requests.
+</ParamField>
+
+<ParamField path="appInfo" type="AppInfo">
+  Information about your application to be included in the User-Agent header.
+  
+  <Expandable title="properties">
+    <ParamField path="name" type="string" required>
+      Your application name.
+    </ParamField>
+    <ParamField path="version" type="string" required>
+      Your application version.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="fetchFn" type="typeof fetch">
+  Custom fetch implementation. Useful for testing or custom network configurations.
+</ParamField>
+
+### Examples
+
+<CodeGroup>
+```typescript Server-side with API key (string)
+const workos = new WorkOS('sk_test_1234567890');
+```
+
+```typescript Server-side with API key (object)
+const workos = new WorkOS({
+  apiKey: 'sk_test_1234567890',
+  clientId: 'client_1234567890',
+});
+```
+
+```typescript PKCE/public client (no API key)
+const workos = new WorkOS({
+  clientId: 'client_1234567890',
+});
+```
+
+```typescript With custom configuration
+const workos = new WorkOS({
+  apiKey: 'sk_test_1234567890',
+  timeout: 30000,
+  appInfo: {
+    name: 'MyApp',
+    version: '1.0.0',
+  },
+});
+```
+</CodeGroup>
+
+## Properties
+
+### baseURL
+
+```typescript
+readonly baseURL: string
+```
+
+The base URL used for all API requests. Constructed from the `https`, `apiHostname`, and `port` options.
+
+### client
+
+```typescript
+readonly client: HttpClient
+```
+
+The underlying HTTP client used for making requests to the WorkOS API.
+
+### clientId
+
+```typescript
+readonly clientId?: string
+```
+
+The WorkOS Client ID, if provided during initialization or via the `WORKOS_CLIENT_ID` environment variable.
+
+### key
+
+```typescript
+readonly key?: string
+```
+
+The WorkOS API key, if provided during initialization or via the `WORKOS_API_KEY` environment variable.
+
+### options
+
+```typescript
+readonly options: WorkOSOptions
+```
+
+The options object used to configure this WorkOS instance.
+
+### version
+
+```typescript
+get version(): string
+```
+
+Returns the current version of the WorkOS SDK.
+
+## Module Properties
+
+The WorkOS client provides access to various WorkOS modules:
+
+### actions
+
+```typescript
+readonly actions: Actions
+```
+
+Access to the [Actions API](/api/actions) for managing user actions and verification flows.
+
+### apiKeys
+
+```typescript
+readonly apiKeys: ApiKeys
+```
+
+Access to the API Keys module for managing API keys.
+
+### auditLogs
+
+```typescript
+readonly auditLogs: AuditLogs
+```
+
+Access to the [Audit Logs API](/api/audit-logs) for creating and exporting audit log events.
+
+### authorization
+
+```typescript
+readonly authorization: Authorization
+```
+
+Access to the Authorization module for managing authorization resources.
+
+### directorySync
+
+```typescript
+readonly directorySync: DirectorySync
+```
+
+Access to the [Directory Sync API](/api/directory-sync) for managing directory connections and syncing user data.
+
+### events
+
+```typescript
+readonly events: Events
+```
+
+Access to the [Events API](/api/events) for retrieving events from WorkOS.
+
+### featureFlags
+
+```typescript
+readonly featureFlags: FeatureFlags
+```
+
+Access to the Feature Flags module for managing feature flag configurations.
+
+### fga
+
+```typescript
+readonly fga: FGA
+```
+
+Access to the Fine-Grained Authorization (FGA) module.
+
+### mfa
+
+```typescript
+readonly mfa: Mfa
+```
+
+Access to the [MFA API](/api/mfa) for multi-factor authentication flows.
+
+### organizations
+
+```typescript
+readonly organizations: Organizations
+```
+
+Access to the [Organizations API](/api/organizations) for managing organizations.
+
+### organizationDomains
+
+```typescript
+readonly organizationDomains: OrganizationDomains
+```
+
+Access to the Organization Domains module for managing organization domain configurations.
+
+### passwordless
+
+```typescript
+readonly passwordless: Passwordless
+```
+
+Access to the [Passwordless API](/api/passwordless) for passwordless authentication flows.
+
+### pipes
+
+```typescript
+readonly pipes: Pipes
+```
+
+Access to the Pipes module for managing data pipeline configurations.
+
+### pkce
+
+```typescript
+readonly pkce: PKCE
+```
+
+Access to PKCE (Proof Key for Code Exchange) utilities for OAuth flows.
+
+### portal
+
+```typescript
+readonly portal: Portal
+```
+
+Access to the [Portal API](/api/portal) for generating Admin Portal sessions.
+
+### sso
+
+```typescript
+readonly sso: SSO
+```
+
+Access to the [SSO API](/api/sso) for Single Sign-On authentication flows.
+
+### userManagement
+
+```typescript
+readonly userManagement: UserManagement
+```
+
+Access to the [User Management API](/api/user-management) for managing users, authentication, and sessions.
+
+### vault
+
+```typescript
+readonly vault: Vault
+```
+
+Access to the Vault module for managing encrypted secrets.
+
+### webhooks
+
+```typescript
+readonly webhooks: Webhooks
+```
+
+Access to the [Webhooks utilities](/api/webhooks) for verifying webhook signatures.
+
+### widgets
+
+```typescript
+readonly widgets: Widgets
+```
+
+Access to the Widgets module for generating widget tokens and URLs.
+
+## Methods
+
+### requireApiKey()
+
+Require an API key for methods that need it.
+
+```typescript
+requireApiKey(methodName: string): void
+```
+
+#### Parameters
+
+<ParamField path="methodName" type="string" required>
+  Name of the method requiring the API key (used in error messages).
+</ParamField>
+
+#### Throws
+
+Throws `ApiKeyRequiredException` if no API key was provided during initialization.
+
+### get()
+
+Make a GET request to the WorkOS API.
+
+```typescript
+async get<Result = any>(
+  path: string,
+  options?: GetOptions
+): Promise<{ data: Result }>
+```
+
+#### Parameters
+
+<ParamField path="path" type="string" required>
+  The API endpoint path.
+</ParamField>
+
+<ParamField path="options" type="GetOptions">
+  Request options.
+  
+  <Expandable title="properties">
+    <ParamField path="query" type="Record<string, any>">
+      Query parameters to include in the request.
+    </ParamField>
+    <ParamField path="accessToken" type="string">
+      Access token for user-scoped requests.
+    </ParamField>
+    <ParamField path="warrantToken" type="string">
+      Warrant token for authorization checks.
+    </ParamField>
+    <ParamField path="skipApiKeyCheck" type="boolean">
+      Skip the API key requirement check.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+#### Returns
+
+<ResponseField name="data" type="Result">
+  The response data from the API.
+</ResponseField>
+
+### post()
+
+Make a POST request to the WorkOS API.
+
+```typescript
+async post<Result = any, Entity = any>(
+  path: string,
+  entity: Entity,
+  options?: PostOptions
+): Promise<{ data: Result }>
+```
+
+#### Parameters
+
+<ParamField path="path" type="string" required>
+  The API endpoint path.
+</ParamField>
+
+<ParamField path="entity" type="Entity" required>
+  The request body to send.
+</ParamField>
+
+<ParamField path="options" type="PostOptions">
+  Request options.
+  
+  <Expandable title="properties">
+    <ParamField path="query" type="Record<string, any>">
+      Query parameters to include in the request.
+    </ParamField>
+    <ParamField path="idempotencyKey" type="string">
+      Idempotency key to prevent duplicate requests.
+    </ParamField>
+    <ParamField path="warrantToken" type="string">
+      Warrant token for authorization checks.
+    </ParamField>
+    <ParamField path="skipApiKeyCheck" type="boolean">
+      Skip the API key requirement check.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+#### Returns
+
+<ResponseField name="data" type="Result">
+  The response data from the API.
+</ResponseField>
+
+### put()
+
+Make a PUT request to the WorkOS API.
+
+```typescript
+async put<Result = any, Entity = any>(
+  path: string,
+  entity: Entity,
+  options?: PutOptions
+): Promise<{ data: Result }>
+```
+
+#### Parameters
+
+<ParamField path="path" type="string" required>
+  The API endpoint path.
+</ParamField>
+
+<ParamField path="entity" type="Entity" required>
+  The request body to send.
+</ParamField>
+
+<ParamField path="options" type="PutOptions">
+  Request options.
+  
+  <Expandable title="properties">
+    <ParamField path="query" type="Record<string, any>">
+      Query parameters to include in the request.
+    </ParamField>
+    <ParamField path="idempotencyKey" type="string">
+      Idempotency key to prevent duplicate requests.
+    </ParamField>
+    <ParamField path="skipApiKeyCheck" type="boolean">
+      Skip the API key requirement check.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+#### Returns
+
+<ResponseField name="data" type="Result">
+  The response data from the API.
+</ResponseField>
+
+### patch()
+
+Make a PATCH request to the WorkOS API.
+
+```typescript
+async patch<Result = any, Entity = any>(
+  path: string,
+  entity: Entity,
+  options?: PatchOptions
+): Promise<{ data: Result }>
+```
+
+#### Parameters
+
+<ParamField path="path" type="string" required>
+  The API endpoint path.
+</ParamField>
+
+<ParamField path="entity" type="Entity" required>
+  The request body to send.
+</ParamField>
+
+<ParamField path="options" type="PatchOptions">
+  Request options.
+  
+  <Expandable title="properties">
+    <ParamField path="query" type="Record<string, any>">
+      Query parameters to include in the request.
+    </ParamField>
+    <ParamField path="idempotencyKey" type="string">
+      Idempotency key to prevent duplicate requests.
+    </ParamField>
+    <ParamField path="skipApiKeyCheck" type="boolean">
+      Skip the API key requirement check.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+#### Returns
+
+<ResponseField name="data" type="Result">
+  The response data from the API.
+</ResponseField>
+
+### delete()
+
+Make a DELETE request to the WorkOS API.
+
+```typescript
+async delete(path: string, query?: any): Promise<void>
+```
+
+#### Parameters
+
+<ParamField path="path" type="string" required>
+  The API endpoint path.
+</ParamField>
+
+<ParamField path="query" type="any">
+  Query parameters to include in the request.
+</ParamField>
+
+### deleteWithBody()
+
+Make a DELETE request with a request body to the WorkOS API.
+
+```typescript
+async deleteWithBody<Entity = any>(
+  path: string,
+  entity: Entity
+): Promise<void>
+```
+
+#### Parameters
+
+<ParamField path="path" type="string" required>
+  The API endpoint path.
+</ParamField>
+
+<ParamField path="entity" type="Entity" required>
+  The request body to send.
+</ParamField>
+
+### emitWarning()
+
+Emit a warning message to the console.
+
+```typescript
+emitWarning(warning: string): void
+```
+
+#### Parameters
+
+<ParamField path="warning" type="string" required>
+  The warning message to emit.
+</ParamField>

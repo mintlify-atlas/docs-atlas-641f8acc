@@ -1,0 +1,149 @@
+---
+title: "Runtime Support Overview"
+description: "Learn about the different JavaScript runtimes supported by the WorkOS Node.js SDK"
+---
+
+The WorkOS Node.js SDK is built to work seamlessly across multiple JavaScript runtimes, from traditional Node.js servers to modern edge computing platforms.
+
+## Supported Runtimes
+
+The SDK provides runtime-specific builds optimized for each environment:
+
+<CardGroup cols={2}>
+  <Card title="Node.js" icon="node" href="/runtimes/nodejs">
+    Node.js 20.15.0 and higher with full feature support
+  </Card>
+  
+  <Card title="Edge Workers" icon="cloudflare" href="/runtimes/edge-workers">
+    Cloudflare Workers, Vercel Edge Functions, and Convex
+  </Card>
+  
+  <Card title="Deno" icon="deno" href="/runtimes/deno-bun">
+    Deno runtime with native TypeScript support
+  </Card>
+  
+  <Card title="Bun" icon="bun" href="/runtimes/deno-bun">
+    Bun runtime for high-performance JavaScript
+  </Card>
+</CardGroup>
+
+## Automatic Runtime Detection
+
+The SDK uses the Node.js [exports field](https://nodejs.org/api/packages.html#conditional-exports) to automatically select the correct build for your runtime:
+
+```json package.json
+{
+  "exports": {
+    ".": {
+      "workerd": "./lib/index.worker.js",      // Cloudflare Workers
+      "edge-light": "./lib/index.worker.js",   // Vercel Edge
+      "deno": "./lib/index.js",                // Deno
+      "bun": "./lib/index.js",                 // Bun
+      "convex": "./lib/index.worker.js",       // Convex
+      "import": "./lib/index.js",              // Node.js ESM
+      "require": "./lib/index.cjs",            // Node.js CJS
+      "default": "./lib/index.js"
+    }
+  }
+}
+```
+
+You don't need to configure anything - just import the SDK normally and it will use the appropriate build.
+
+## Runtime Differences
+
+### Standard Build (`index.js` / `index.cjs`)
+
+Used by Node.js, Deno, and Bun:
+
+- Full Node.js API access
+- `User-Agent` header support
+- `process.emitWarning()` for deprecation warnings
+- Supports both ESM and CommonJS
+
+### Worker Build (`index.worker.js`)
+
+Used by Cloudflare Workers, Vercel Edge, and Convex:
+
+- Web Standards API only (no Node.js APIs)
+- Limited header customization
+- `console.warn()` for warnings instead of `process.emitWarning()`
+- Optimized for edge runtime constraints
+
+<Note>
+  Both builds use the same SubtleCrypto API for cryptographic operations, ensuring consistent webhook verification and JWT handling across all runtimes.
+</Note>
+
+## Module Formats
+
+The SDK is distributed in multiple module formats:
+
+<AccordionGroup>
+  <Accordion title="ES Modules (ESM)" icon="js">
+    - Modern JavaScript module format
+    - Native `import`/`export` syntax
+    - Tree-shakeable for smaller bundle sizes
+    - Default for Node.js, Deno, Bun, and edge runtimes
+  </Accordion>
+  
+  <Accordion title="CommonJS (CJS)" icon="node-js">
+    - Traditional Node.js module format
+    - Uses `require()` and `module.exports`
+    - Bundles ESM-only dependencies for compatibility
+    - Available for Node.js and Bun
+  </Accordion>
+</AccordionGroup>
+
+## Getting Started
+
+Choose your runtime to see specific installation and usage instructions:
+
+<CardGroup cols={2}>
+  <Card title="Node.js" icon="node" href="/runtimes/nodejs">
+    Traditional server-side JavaScript
+  </Card>
+  
+  <Card title="Edge Workers" icon="cloudflare" href="/runtimes/edge-workers">
+    Cloudflare Workers and Vercel Edge
+  </Card>
+  
+  <Card title="Deno & Bun" icon="terminal" href="/runtimes/deno-bun">
+    Modern JavaScript runtimes
+  </Card>
+</CardGroup>
+
+## Requirements
+
+<CodeGroup>
+```json Node.js
+{
+  "engines": {
+    "node": ">=20.15.0"
+  }
+}
+```
+
+```typescript Deno
+// Deno 1.0+
+import { WorkOS } from '@workos-inc/node';
+```
+
+```typescript Bun
+// Bun 1.0+
+import { WorkOS } from '@workos-inc/node';
+```
+</CodeGroup>
+
+## Manual Runtime Selection
+
+In rare cases where you need to manually select the worker build, you can import it directly:
+
+```typescript
+import { WorkOS } from '@workos-inc/node/worker';
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+```
+
+<Warning>
+  Manual runtime selection is rarely needed. The automatic runtime detection works for 99% of use cases.
+</Warning>

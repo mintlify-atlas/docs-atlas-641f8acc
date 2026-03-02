@@ -1,0 +1,466 @@
+---
+title: Managing Organizations
+description: Create, update, and manage organizations using the WorkOS Node SDK
+---
+
+This guide covers working with organizations in WorkOS, including creating organizations, managing domains, and working with organization memberships.
+
+## Prerequisites
+
+```bash
+npm install @workos-inc/node
+```
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+```
+
+## Creating and Managing Organizations
+
+<Steps>
+  <Step title="Create an Organization">
+    Create a new organization with domain verification:
+
+    ```typescript
+    const organization = await workos.organizations.createOrganization({
+      name: 'Acme Corporation',
+      domainData: [
+        { domain: 'acme.com', state: 'verified' }
+      ]
+    });
+
+    console.log(organization.id);     // org_123
+    console.log(organization.name);   // Acme Corporation
+    console.log(organization.domains); // Domain details
+    ```
+
+    With idempotency key for safe retries:
+
+    ```typescript
+    const organization = await workos.organizations.createOrganization(
+      {
+        name: 'Acme Corporation',
+        domainData: [
+          { domain: 'acme.com', state: 'verified' }
+        ]
+      },
+      {
+        idempotencyKey: 'unique-request-id'
+      }
+    );
+    ```
+  </Step>
+
+  <Step title="Get an Organization">
+    Retrieve organization details by ID:
+
+    ```typescript
+    const organization = await workos.organizations.getOrganization('org_123');
+
+    console.log(organization.name);
+    console.log(organization.domains);
+    console.log(organization.allowProfilesOutsideOrganization);
+    ```
+
+    Or by external ID:
+
+    ```typescript
+    const organization = await workos.organizations.getOrganizationByExternalId(
+      'external_org_123'
+    );
+    ```
+  </Step>
+
+  <Step title="Update an Organization">
+    Update organization properties:
+
+    ```typescript
+    const organization = await workos.organizations.updateOrganization({
+      organization: 'org_123',
+      name: 'Acme Corp',
+      domainData: [
+        { domain: 'acme.com', state: 'verified' },
+        { domain: 'acmecorp.com', state: 'pending' }
+      ]
+    });
+
+    console.log('Updated:', organization.name);
+    ```
+  </Step>
+
+  <Step title="List Organizations">
+    List organizations with filtering:
+
+    ```typescript
+    const organizations = await workos.organizations.listOrganizations({
+      domains: ['acme.com'],
+      limit: 10
+    });
+
+    for await (const org of organizations.autoPagination()) {
+      console.log(org.id, org.name);
+    }
+    ```
+  </Step>
+
+  <Step title="Delete an Organization">
+    Permanently delete an organization:
+
+    ```typescript
+    await workos.organizations.deleteOrganization('org_123');
+    ```
+  </Step>
+</Steps>
+
+## Organization Domains
+
+### Domain States
+
+Organization domains can have different verification states:
+
+```typescript
+import { DomainDataState } from '@workos-inc/node';
+
+const organization = await workos.organizations.createOrganization({
+  name: 'Acme Corporation',
+  domainData: [
+    { domain: 'acme.com', state: DomainDataState.Verified },
+    { domain: 'acme.org', state: DomainDataState.Pending }
+  ]
+});
+```
+
+### Working with Domains
+
+```typescript
+const organization = await workos.organizations.getOrganization('org_123');
+
+organization.domains.forEach(domain => {
+  console.log(domain.domain);              // acme.com
+  console.log(domain.state);               // verified
+  console.log(domain.verificationStrategy); // dns
+  console.log(domain.verificationToken);   // Token for DNS record
+});
+```
+
+## Organization Metadata
+
+Store custom data with organizations:
+
+```typescript
+const organization = await workos.organizations.createOrganization({
+  name: 'Acme Corporation',
+  metadata: {
+    industry: 'Technology',
+    employeeCount: 500,
+    tier: 'enterprise'
+  }
+});
+
+console.log(organization.metadata);
+```
+
+## Organization Memberships
+
+### Create Organization Membership
+
+Add a user to an organization:
+
+```typescript
+const membership = await workos.userManagement.createOrganizationMembership({
+  userId: 'user_123',
+  organizationId: 'org_123',
+  roleSlug: 'member'
+});
+
+console.log(membership.id);              // om_123
+console.log(membership.userId);          // user_123
+console.log(membership.organizationId);  // org_123
+console.log(membership.role);            // { slug: 'member' }
+```
+
+### List Organization Memberships
+
+List all memberships for an organization:
+
+```typescript
+const memberships = await workos.userManagement.listOrganizationMemberships({
+  organizationId: 'org_123',
+  limit: 10
+});
+
+for await (const membership of memberships.autoPagination()) {
+  console.log(membership.userId, membership.role.slug);
+}
+```
+
+List memberships for a specific user:
+
+```typescript
+const memberships = await workos.userManagement.listOrganizationMemberships({
+  userId: 'user_123'
+});
+```
+
+### Get Organization Membership
+
+```typescript
+const membership = await workos.userManagement.getOrganizationMembership('om_123');
+
+console.log(membership.userId);
+console.log(membership.organizationId);
+console.log(membership.status);  // active
+```
+
+### Update Organization Membership
+
+Change a user's role:
+
+```typescript
+const membership = await workos.userManagement.updateOrganizationMembership(
+  'om_123',
+  { roleSlug: 'admin' }
+);
+
+console.log('New role:', membership.role.slug);
+```
+
+### Deactivate/Reactivate Membership
+
+```typescript
+// Deactivate membership
+const membership = await workos.userManagement.deactivateOrganizationMembership('om_123');
+console.log(membership.status); // inactive
+
+// Reactivate membership
+const reactivated = await workos.userManagement.reactivateOrganizationMembership('om_123');
+console.log(reactivated.status); // active
+```
+
+### Delete Organization Membership
+
+```typescript
+await workos.userManagement.deleteOrganizationMembership('om_123');
+```
+
+## Organization Roles
+
+### List Organization Roles
+
+Retrieve all roles available for an organization:
+
+```typescript
+const { data } = await workos.organizations.listOrganizationRoles({
+  organizationId: 'org_123'
+});
+
+data.forEach(role => {
+  console.log(role.slug);        // admin, member, etc.
+  console.log(role.name);        // Admin
+  console.log(role.type);        // EnvironmentRole or OrganizationRole
+  console.log(role.permissions); // ['posts:create', 'posts:delete']
+});
+```
+
+## Organization Invitations
+
+### Send Invitation
+
+Invite a user to join an organization:
+
+```typescript
+const invitation = await workos.userManagement.sendInvitation({
+  email: 'newuser@example.com',
+  organizationId: 'org_123',
+  roleSlug: 'member',
+  inviterUserId: 'user_456'
+});
+
+console.log(invitation.id);              // invitation_123
+console.log(invitation.token);           // Invitation token
+console.log(invitation.acceptInvitationUrl); // URL to accept
+```
+
+### List Invitations
+
+```typescript
+const invitations = await workos.userManagement.listInvitations({
+  organizationId: 'org_123'
+});
+
+for await (const invitation of invitations.autoPagination()) {
+  console.log(invitation.email, invitation.state);
+}
+```
+
+### Get Invitation
+
+```typescript
+const invitation = await workos.userManagement.getInvitation('invitation_123');
+
+console.log(invitation.email);
+console.log(invitation.state);  // pending, accepted, expired
+```
+
+Find by token:
+
+```typescript
+const invitation = await workos.userManagement.findInvitationByToken(
+  'invitation_token'
+);
+```
+
+### Accept Invitation
+
+```typescript
+const invitation = await workos.userManagement.acceptInvitation('invitation_123');
+console.log(invitation.state); // accepted
+```
+
+### Resend Invitation
+
+```typescript
+const invitation = await workos.userManagement.resendInvitation('invitation_123');
+```
+
+### Revoke Invitation
+
+```typescript
+const invitation = await workos.userManagement.revokeInvitation('invitation_123');
+console.log(invitation.state); // revoked
+```
+
+## Organization Feature Flags
+
+Manage feature flags at the organization level:
+
+```typescript
+const featureFlags = await workos.organizations.listOrganizationFeatureFlags({
+  organizationId: 'org_123',
+  limit: 10
+});
+
+for await (const flag of featureFlags.autoPagination()) {
+  console.log(flag.slug);        // advanced-dashboard
+  console.log(flag.name);        // Advanced Dashboard
+  console.log(flag.enabled);     // true/false
+  console.log(flag.defaultValue); // Default state
+}
+```
+
+## Stripe Integration
+
+Link organizations to Stripe customers:
+
+```typescript
+// Set Stripe customer ID
+const organization = await workos.organizations.updateOrganization({
+  organization: 'org_123',
+  stripeCustomerId: 'cus_MX8J9nfK4lP2Yw'
+});
+
+console.log(organization.stripeCustomerId);
+
+// Clear Stripe customer ID
+const cleared = await workos.organizations.updateOrganization({
+  organization: 'org_123',
+  stripeCustomerId: null
+});
+```
+
+## Organization API Keys
+
+### List Organization API Keys
+
+```typescript
+const apiKeys = await workos.organizations.listOrganizationApiKeys({
+  organizationId: 'org_123',
+  limit: 10
+});
+
+for await (const key of apiKeys.autoPagination()) {
+  console.log(key.id);
+  console.log(key.name);
+  console.log(key.obfuscatedValue);  // sk_…PRYS
+  console.log(key.lastUsedAt);
+  console.log(key.permissions);
+}
+```
+
+### Create Organization API Key
+
+```typescript
+const apiKey = await workos.organizations.createOrganizationApiKey(
+  {
+    organizationId: 'org_123',
+    name: 'Production Key',
+    permissions: ['read', 'write']
+  },
+  {
+    idempotencyKey: 'unique-key-id'
+  }
+);
+
+console.log(apiKey.id);
+console.log(apiKey.value);  // Full key - only shown once!
+console.log(apiKey.obfuscatedValue);
+```
+
+## Complete Example
+
+```typescript
+import { WorkOS, DomainDataState } from '@workos-inc/node';
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+
+async function setupOrganization(companyName: string, domain: string) {
+  // Create organization
+  const organization = await workos.organizations.createOrganization({
+    name: companyName,
+    domainData: [
+      { domain, state: DomainDataState.Verified }
+    ],
+    metadata: {
+      industry: 'Technology',
+      plan: 'enterprise'
+    }
+  });
+
+  console.log('Organization created:', organization.id);
+
+  // Add users to organization
+  const adminUser = await workos.userManagement.createUser({
+    email: `admin@${domain}`,
+    firstName: 'Admin',
+    lastName: 'User',
+    emailVerified: true
+  });
+
+  const membership = await workos.userManagement.createOrganizationMembership({
+    userId: adminUser.id,
+    organizationId: organization.id,
+    roleSlug: 'admin'
+  });
+
+  console.log('Admin user added:', membership.id);
+
+  // Send invitation to team member
+  const invitation = await workos.userManagement.sendInvitation({
+    email: `member@${domain}`,
+    organizationId: organization.id,
+    roleSlug: 'member',
+    inviterUserId: adminUser.id
+  });
+
+  console.log('Invitation sent:', invitation.acceptInvitationUrl);
+
+  return organization;
+}
+
+// Usage
+setupOrganization('Acme Corporation', 'acme.com')
+  .then(org => console.log('Setup complete:', org.name))
+  .catch(console.error);
+```

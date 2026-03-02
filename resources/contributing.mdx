@@ -1,0 +1,409 @@
+---
+title: Contributing
+description: Guidelines for contributing to the WorkOS Node SDK
+---
+
+We welcome contributions to the WorkOS Node SDK! This guide will help you get started.
+
+## Getting Started
+
+### Prerequisites
+
+Before contributing, ensure you have:
+
+- Node.js 20.15.0 or higher
+- npm 10 or higher
+- Git
+- A GitHub account
+
+### Repository Setup
+
+<Steps>
+  <Step title="Fork the Repository">
+    Fork the [workos-node repository](https://github.com/workos/workos-node) to your GitHub account.
+  </Step>
+  
+  <Step title="Clone Your Fork">
+    ```bash
+    git clone https://github.com/YOUR_USERNAME/workos-node.git
+    cd workos-node
+    ```
+  </Step>
+  
+  <Step title="Install Dependencies">
+    ```bash
+    npm install
+    ```
+  </Step>
+  
+  <Step title="Create a Branch">
+    ```bash
+    git checkout -b feature/your-feature-name
+    ```
+  </Step>
+</Steps>
+
+## Development Workflow
+
+### Project Structure
+
+```
+workos-node/
+├── src/               # TypeScript source code
+│   ├── workos.ts      # Main WorkOS class
+│   ├── user-management/
+│   ├── sso/
+│   ├── directory-sync/
+│   └── ...
+├── lib/               # Compiled output (generated)
+├── package.json       # Package configuration
+├── tsconfig.json      # TypeScript configuration
+└── tsdown.config.ts   # Build configuration
+```
+
+### Available Scripts
+
+```bash
+# Development
+npm run build          # Build the project
+npm run build:watch    # Build in watch mode
+npm run typecheck      # Check TypeScript types
+
+# Testing
+npm test               # Run tests
+npm run test:watch     # Run tests in watch mode
+
+# Code Quality
+npm run lint           # Lint code
+npm run format         # Format code with Prettier
+npm run prettier       # Check formatting
+
+# Runtime Checks
+npm run check:runtimes # Test across Node.js, Deno, Bun, Cloudflare Workers
+npm run check:types    # Validate type definitions
+```
+
+### Making Changes
+
+<Steps>
+  <Step title="Write Your Code">
+    Make your changes in the `src/` directory. The SDK is written in TypeScript with strict type checking enabled.
+  </Step>
+  
+  <Step title="Add Tests">
+    Write tests for your changes in `.spec.ts` files alongside your code.
+    
+    ```typescript
+    // Example: src/user-management/user-management.spec.ts
+    describe('UserManagement', () => {
+      it('should get a user', async () => {
+        // Test implementation
+      });
+    });
+    ```
+  </Step>
+  
+  <Step title="Run Type Checking">
+    ```bash
+    npm run typecheck
+    ```
+  </Step>
+  
+  <Step title="Run Tests">
+    ```bash
+    npm test
+    ```
+  </Step>
+  
+  <Step title="Lint and Format">
+    ```bash
+    npm run lint
+    npm run format
+    ```
+  </Step>
+</Steps>
+
+## Code Guidelines
+
+### TypeScript Style
+
+The SDK uses strict TypeScript configuration:
+
+```typescript
+// ✅ Good: Explicit types
+interface CreateUserOptions {
+  email: string;
+  firstName?: string;
+  lastName?: string;
+}
+
+async function createUser(options: CreateUserOptions): Promise<User> {
+  // Implementation
+}
+
+// ❌ Bad: Implicit any types
+async function createUser(options) {
+  // Implementation
+}
+```
+
+### Code Formatting
+
+We use Prettier for code formatting. Run `npm run format` before committing.
+
+### Naming Conventions
+
+- **Files**: Use kebab-case (`user-management.ts`, `get-user-options.interface.ts`)
+- **Classes**: Use PascalCase (`WorkOS`, `UserManagement`)
+- **Interfaces**: Use PascalCase (`User`, `CreateUserOptions`)
+- **Functions**: Use camelCase (`getUser`, `listOrganizations`)
+- **Constants**: Use UPPER_SNAKE_CASE (`DEFAULT_HOSTNAME`, `HEADER_AUTHORIZATION`)
+
+### File Organization
+
+Each module should have:
+
+```
+module-name/
+├── module-name.ts              # Main implementation
+├── module-name.spec.ts         # Tests
+├── interfaces/                  # TypeScript interfaces
+│   ├── index.ts
+│   ├── entity.interface.ts
+│   └── options.interface.ts
+└── serializers/                 # Data transformation
+    ├── index.ts
+    └── entity.serializer.ts
+```
+
+## Testing
+
+### Writing Tests
+
+Tests use Jest and follow the Arrange-Act-Assert pattern:
+
+```typescript
+import { WorkOS } from '../workos';
+import fetchMock from 'jest-fetch-mock';
+
+describe('UserManagement', () => {
+  beforeEach(() => fetchMock.resetMocks());
+  
+  describe('getUser', () => {
+    it('should return a user', async () => {
+      // Arrange
+      const workos = new WorkOS('sk_test_123');
+      fetchMock.mockResponseOnce(JSON.stringify({
+        id: 'user_123',
+        email: 'user@example.com',
+        // ...
+      }));
+      
+      // Act
+      const user = await workos.userManagement.getUser({ 
+        userId: 'user_123' 
+      });
+      
+      // Assert
+      expect(user.id).toBe('user_123');
+      expect(user.email).toBe('user@example.com');
+    });
+  });
+});
+```
+
+### Test Coverage
+
+Aim for high test coverage:
+
+- Unit tests for all public methods
+- Integration tests for critical workflows
+- Edge case and error handling tests
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run specific test file
+npm test user-management.spec.ts
+
+# Run in watch mode
+npm run test:watch
+
+# Run with coverage
+npm test -- --coverage
+```
+
+## Pull Request Process
+
+### Before Submitting
+
+<Accordion title="Checklist">
+  - [ ] Code follows the project's style guidelines
+  - [ ] All tests pass (`npm test`)
+  - [ ] Type checking passes (`npm run typecheck`)
+  - [ ] Code is formatted (`npm run format`)
+  - [ ] New features include tests
+  - [ ] Breaking changes are documented
+  - [ ] Commit messages are clear and descriptive
+</Accordion>
+
+### Submitting a Pull Request
+
+<Steps>
+  <Step title="Push Your Branch">
+    ```bash
+    git push origin feature/your-feature-name
+    ```
+  </Step>
+  
+  <Step title="Open a Pull Request">
+    Go to the [workos-node repository](https://github.com/workos/workos-node) and click "New Pull Request".
+  </Step>
+  
+  <Step title="Fill Out the Template">
+    Provide a clear description of your changes:
+    
+    - What does this PR do?
+    - Why is this change needed?
+    - Are there any breaking changes?
+    - How was it tested?
+  </Step>
+  
+  <Step title="Wait for Review">
+    A maintainer will review your PR and may request changes. Address any feedback and push updates to your branch.
+  </Step>
+</Steps>
+
+### PR Title Format
+
+Use conventional commit format:
+
+```
+type(scope): description
+
+Examples:
+feat(user-management): add PKCE authentication support
+fix(sso): correct authorization URL parameter handling
+docs(readme): update installation instructions
+test(directory-sync): add tests for custom attributes
+```
+
+**Types:**
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation changes
+- `test`: Test additions or changes
+- `refactor`: Code refactoring
+- `chore`: Build process or tooling changes
+
+## Reporting Issues
+
+### Bug Reports
+
+When reporting bugs, include:
+
+- SDK version
+- Node.js version
+- Operating system
+- Minimal code example to reproduce
+- Expected vs actual behavior
+- Error messages or stack traces
+
+### Feature Requests
+
+For feature requests, describe:
+
+- The problem you're trying to solve
+- Your proposed solution
+- Alternative solutions you've considered
+- Any additional context
+
+## Documentation
+
+If your changes affect the public API:
+
+- Update JSDoc comments in the code
+- Update README.md if needed
+- Consider if documentation site updates are needed
+
+```typescript
+/**
+ * Get a user by ID.
+ *
+ * @param options - Options for getting a user
+ * @param options.userId - The ID of the user to get
+ * @returns The user object
+ * @throws {NotFoundException} If the user is not found
+ *
+ * @example
+ * ```typescript
+ * const user = await workos.userManagement.getUser({ 
+ *   userId: 'user_123' 
+ * });
+ * ```
+ */
+async getUser(options: GetUserOptions): Promise<User> {
+  // Implementation
+}
+```
+
+## Release Process
+
+Maintainers handle releases using semantic versioning:
+
+- **Patch (X.Y.Z)**: Bug fixes, no breaking changes
+- **Minor (X.Y.0)**: New features, backwards compatible
+- **Major (X.0.0)**: Breaking changes
+
+Releases are automated via [release-please](https://github.com/googleapis/release-please).
+
+## Code of Conduct
+
+By contributing, you agree to:
+
+- Be respectful and inclusive
+- Provide constructive feedback
+- Focus on what is best for the community
+- Show empathy towards others
+
+## Getting Help
+
+Need help with your contribution?
+
+- Check existing [issues](https://github.com/workos/workos-node/issues)
+- Review [pull requests](https://github.com/workos/workos-node/pulls)
+- Ask questions in your PR or issue
+- Contact [support@workos.com](mailto:support@workos.com)
+
+## Recognition
+
+All contributors are recognized in:
+
+- The project's [CHANGELOG.md](https://github.com/workos/workos-node/blob/main/CHANGELOG.md)
+- GitHub's contributors page
+- Release notes
+
+Thank you for contributing to WorkOS!
+
+## Additional Resources
+
+<CardGroup cols={2}>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/workos/workos-node">
+    View source code and open issues
+  </Card>
+  
+  <Card title="API Reference" icon="book" href="https://workos.com/docs/reference">
+    Official WorkOS API documentation
+  </Card>
+  
+  <Card title="WorkOS Dashboard" icon="gauge" href="https://dashboard.workos.com">
+    Manage your WorkOS account
+  </Card>
+  
+  <Card title="Community" icon="users" href="https://workos.com/community">
+    Join the WorkOS community
+  </Card>
+</CardGroup>

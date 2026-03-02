@@ -1,0 +1,337 @@
+---
+title: Configuration
+description: Configure the WorkOS Node.js SDK with API keys, custom options, and runtime settings
+---
+
+The WorkOS SDK provides flexible configuration options to customize its behavior for your application.
+
+## Basic configuration
+
+The simplest way to configure the WorkOS client is by providing an API key:
+
+<Tabs>
+  <Tab title="Environment Variables">
+    ```bash .env
+    WORKOS_API_KEY="sk_test_1234567890"
+    WORKOS_CLIENT_ID="client_1234567890"
+    ```
+    
+    ```typescript
+    import { WorkOS } from '@workos-inc/node';
+
+    // Automatically reads from environment variables
+    const workos = new WorkOS();
+    ```
+  </Tab>
+  
+  <Tab title="String Parameter">
+    ```typescript
+    import { WorkOS } from '@workos-inc/node';
+
+    const workos = new WorkOS('sk_test_1234567890');
+    ```
+  </Tab>
+  
+  <Tab title="Options Object">
+    ```typescript
+    import { WorkOS } from '@workos-inc/node';
+
+    const workos = new WorkOS({
+      apiKey: 'sk_test_1234567890',
+      clientId: 'client_1234567890',
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Configuration options
+
+The `WorkOSOptions` interface supports the following configuration parameters:
+
+### API credentials
+
+<ParamField path="apiKey" type="string" optional>
+  Your WorkOS API key from the dashboard. Required for server-side applications.
+  
+  ```typescript
+  const workos = new WorkOS({
+    apiKey: 'sk_test_1234567890',
+  });
+  ```
+</ParamField>
+
+<ParamField path="clientId" type="string" optional>
+  Your WorkOS client ID. Required for authentication flows.
+  
+  ```typescript
+  const workos = new WorkOS({
+    apiKey: 'sk_test_1234567890',
+    clientId: 'client_1234567890',
+  });
+  ```
+</ParamField>
+
+### Network configuration
+
+<ParamField path="apiHostname" type="string" default="api.workos.com">
+  Custom API hostname for self-hosted or regional deployments.
+  
+  ```typescript
+  const workos = new WorkOS({
+    apiKey: 'sk_test_1234567890',
+    apiHostname: 'api.eu.workos.com',
+  });
+  ```
+</ParamField>
+
+<ParamField path="https" type="boolean" default="true">
+  Whether to use HTTPS protocol. Set to `false` for local development.
+  
+  ```typescript
+  const workos = new WorkOS({
+    apiKey: 'sk_test_1234567890',
+    https: false,
+    port: 3000,
+  });
+  ```
+</ParamField>
+
+<ParamField path="port" type="number" optional>
+  Custom port for API requests. Useful for local development or proxy setups.
+  
+  ```typescript
+  const workos = new WorkOS({
+    apiKey: 'sk_test_1234567890',
+    port: 8080,
+  });
+  ```
+</ParamField>
+
+<ParamField path="timeout" type="number" optional>
+  Request timeout in milliseconds.
+  
+  ```typescript
+  const workos = new WorkOS({
+    apiKey: 'sk_test_1234567890',
+    timeout: 10000, // 10 seconds
+  });
+  ```
+</ParamField>
+
+### Advanced options
+
+<ParamField path="config" type="RequestInit" optional>
+  Additional fetch configuration options (headers, signal, etc.).
+  
+  ```typescript
+  const workos = new WorkOS({
+    apiKey: 'sk_test_1234567890',
+    config: {
+      headers: {
+        'X-Custom-Header': 'value',
+      },
+    },
+  });
+  ```
+</ParamField>
+
+<ParamField path="appInfo" type="object" optional>
+  Application metadata for tracking and debugging.
+  
+  ```typescript
+  const workos = new WorkOS({
+    apiKey: 'sk_test_1234567890',
+    appInfo: {
+      name: 'MyApp',
+      version: '1.0.0',
+    },
+  });
+  ```
+  
+  This information is included in the `User-Agent` header for all requests.
+</ParamField>
+
+<ParamField path="fetchFn" type="typeof fetch" optional>
+  Custom fetch implementation. Useful for testing or proxying requests.
+  
+  ```typescript
+  const workos = new WorkOS({
+    apiKey: 'sk_test_1234567890',
+    fetchFn: customFetch,
+  });
+  ```
+</ParamField>
+
+## Public client configuration
+
+For applications that cannot securely store an API key (mobile apps, CLI tools, browser apps), initialize with only a client ID:
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS({
+  clientId: 'client_1234567890',
+  // No apiKey required
+});
+```
+
+<Info>
+  Public clients can only use PKCE-based authentication methods. Server-side methods requiring an API key will throw an error.
+</Info>
+
+## Type-safe factory function
+
+For compile-time type safety, use the `createWorkOS` factory function:
+
+```typescript
+import { createWorkOS } from '@workos-inc/node';
+
+// Public client - TypeScript enforces PKCE-only methods
+const publicWorkos = createWorkOS({
+  clientId: 'client_123',
+});
+
+// TypeScript allows this
+await publicWorkos.userManagement.getAuthorizationUrlWithPKCE({...});
+
+// TypeScript error - listUsers requires API key
+await publicWorkos.userManagement.listUsers(); // ❌ Error!
+
+// Confidential client - full access
+const workos = createWorkOS({
+  apiKey: process.env.WORKOS_API_KEY!,
+  clientId: 'client_123',
+});
+
+// Both methods work
+await workos.userManagement.listUsers(); // ✅ OK
+```
+
+<Tip>
+  The `createWorkOS` factory function does **not** read from environment variables. Pass credentials explicitly for predictable type inference.
+</Tip>
+
+## Environment-specific configuration
+
+Configure the SDK differently for development, staging, and production:
+
+<CodeGroup>
+
+```typescript Development
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS({
+  apiKey: process.env.WORKOS_API_KEY,
+  clientId: process.env.WORKOS_CLIENT_ID,
+  // Use local development settings
+  https: false,
+  port: 3000,
+  timeout: 30000, // Longer timeout for debugging
+});
+```
+
+```typescript Production
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS({
+  apiKey: process.env.WORKOS_API_KEY,
+  clientId: process.env.WORKOS_CLIENT_ID,
+  timeout: 10000,
+  appInfo: {
+    name: 'MyApp',
+    version: process.env.APP_VERSION || '1.0.0',
+  },
+});
+```
+
+```typescript Regional (EU)
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS({
+  apiKey: process.env.WORKOS_API_KEY,
+  clientId: process.env.WORKOS_CLIENT_ID,
+  // Use EU region
+  apiHostname: 'api.eu.workos.com',
+});
+```
+
+</CodeGroup>
+
+## Custom headers
+
+Add custom headers to all API requests:
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS({
+  apiKey: 'sk_test_1234567890',
+  config: {
+    headers: {
+      'X-Custom-Header': 'value',
+      'X-Request-ID': 'unique-request-id',
+    },
+  },
+});
+```
+
+<Note>
+  Custom headers are merged with default headers. The SDK automatically adds `User-Agent` and `Authorization` headers.
+</Note>
+
+## PKCE with confidential clients
+
+Server-side applications can use PKCE alongside the client secret for enhanced security (recommended by OAuth 2.1):
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_test_1234567890');
+
+// Use PKCE even with API key for additional security
+const { url, codeVerifier } = 
+  await workos.userManagement.getAuthorizationUrlWithPKCE({
+    provider: 'authkit',
+    redirectUri: 'https://example.com/callback',
+    clientId: workos.clientId!,
+  });
+
+// Both client_secret AND code_verifier will be sent
+const { accessToken } = await workos.userManagement.authenticateWithCode({
+  code: authorizationCode,
+  codeVerifier,
+  clientId: workos.clientId!,
+});
+```
+
+## Checking the SDK version
+
+You can check which version of the SDK is running:
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS();
+
+console.log('WorkOS SDK version:', workos.version);
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Build your first integration with WorkOS
+  </Card>
+  
+  <Card title="User Management" icon="users" href="/guides/user-authentication">
+    Set up authentication and user management
+  </Card>
+  
+  <Card title="SSO Integration" icon="key" href="/guides/implementing-sso">
+    Configure Single Sign-On
+  </Card>
+  
+  <Card title="Webhooks" icon="webhook" href="/guides/handling-webhooks">
+    Handle WorkOS webhook events
+  </Card>
+</CardGroup>

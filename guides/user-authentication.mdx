@@ -1,0 +1,488 @@
+---
+title: User Authentication
+description: Implement user authentication with email/password, magic auth, and multi-factor authentication
+---
+
+This guide covers implementing authentication flows using the WorkOS User Management API, including password authentication, magic links, MFA, and session management.
+
+## Prerequisites
+
+```bash
+npm install @workos-inc/node
+```
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY, {
+  clientId: process.env.WORKOS_CLIENT_ID
+});
+```
+
+## Password Authentication
+
+<Steps>
+  <Step title="Create a User">
+    Create a user with email and password:
+
+    ```typescript
+    const user = await workos.userManagement.createUser({
+      email: 'user@example.com',
+      password: 'secure-password',
+      firstName: 'John',
+      lastName: 'Doe',
+      emailVerified: false
+    });
+
+    console.log(user.id);           // user_123
+    console.log(user.email);        // user@example.com
+    console.log(user.emailVerified); // false
+    ```
+  </Step>
+
+  <Step title="Authenticate with Password">
+    Authenticate users with their email and password:
+
+    ```typescript
+    const { user, accessToken, refreshToken } = 
+      await workos.userManagement.authenticateWithPassword({
+        clientId: process.env.WORKOS_CLIENT_ID,
+        email: 'user@example.com',
+        password: 'secure-password'
+      });
+
+    console.log('Logged in:', user.email);
+    console.log('Access token:', accessToken);
+    ```
+  </Step>
+
+  <Step title="Handle Session Cookies">
+    Seal session data in encrypted cookies:
+
+    ```typescript
+    const response = await workos.userManagement.authenticateWithPassword({
+      clientId: process.env.WORKOS_CLIENT_ID,
+      email: 'user@example.com',
+      password: 'secure-password',
+      session: {
+        sealSession: true,
+        cookiePassword: process.env.COOKIE_PASSWORD // 32+ character secret
+      }
+    });
+
+    // Set the encrypted session cookie
+    res.cookie('wos-session', response.sealedSession, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    });
+    ```
+  </Step>
+
+  <Step title="Verify Session Cookies">
+    Authenticate requests using session cookies:
+
+    ```typescript
+    const session = await workos.userManagement.authenticateWithSessionCookie({
+      sessionData: req.cookies['wos-session'],
+      cookiePassword: process.env.COOKIE_PASSWORD
+    });
+
+    if (session.authenticated) {
+      console.log('User:', session.user.email);
+      console.log('Session ID:', session.sessionId);
+      console.log('Organization:', session.organizationId);
+      console.log('Permissions:', session.permissions);
+    } else {
+      console.log('Invalid session:', session.reason);
+    }
+    ```
+  </Step>
+</Steps>
+
+## Magic Link Authentication
+
+<Steps>
+  <Step title="Create a Magic Auth Link">
+    Generate a magic authentication link:
+
+    ```typescript
+    const magicAuth = await workos.userManagement.createMagicAuth({
+      email: 'user@example.com',
+      invitationToken: 'optional_invitation_token'
+    });
+
+    console.log(magicAuth.id);    // magic_auth_123
+    console.log(magicAuth.code);  // Secret code for email
+    console.log(magicAuth.email); // user@example.com
+
+    // Send magicAuth.code via email to the user
+    ```
+  </Step>
+
+  <Step title="Authenticate with Magic Auth Code">
+    Verify the code when user clicks the link:
+
+    ```typescript
+    const { user, accessToken } = 
+      await workos.userManagement.authenticateWithMagicAuth({
+        clientId: process.env.WORKOS_CLIENT_ID,
+        code: '123456',
+        email: 'user@example.com'
+      });
+
+    console.log('User authenticated:', user.email);
+    ```
+  </Step>
+</Steps>
+
+## OAuth 2.0 Flow
+
+<Steps>
+  <Step title="Generate Authorization URL">
+    Redirect users to the WorkOS authentication page:
+
+    ```typescript
+    const authorizationUrl = workos.userManagement.getAuthorizationUrl({
+      provider: 'authkit',
+      clientId: process.env.WORKOS_CLIENT_ID,
+      redirectUri: 'http://localhost:3000/callback',
+      state: 'random-state'
+    });
+
+    res.redirect(authorizationUrl);
+    ```
+
+    For public clients, use automatic PKCE:
+
+    ```typescript
+    const { url, state, codeVerifier } = 
+      await workos.userManagement.getAuthorizationUrlWithPKCE({
+        provider: 'authkit',
+        clientId: process.env.WORKOS_CLIENT_ID,
+        redirectUri: 'myapp://callback'
+      });
+
+    // Store state and codeVerifier securely
+    ```
+  </Step>
+
+  <Step title="Exchange Authorization Code">
+    Exchange the authorization code for tokens:
+
+    ```typescript
+    const { user, accessToken, refreshToken } = 
+      await workos.userManagement.authenticateWithCode({
+        clientId: process.env.WORKOS_CLIENT_ID,
+        code: req.query.code as string
+      });
+
+    // For public clients with PKCE:
+    const result = await workos.userManagement.authenticateWithCode({
+      clientId: process.env.WORKOS_CLIENT_ID,
+      code: req.query.code as string,
+      codeVerifier: storedCodeVerifier
+    });
+    ```
+  </Step>
+
+  <Step title="Refresh Access Tokens">
+    Use refresh tokens to get new access tokens:
+
+    ```typescript
+    const { accessToken, refreshToken } = 
+      await workos.userManagement.authenticateWithRefreshToken({
+        clientId: process.env.WORKOS_CLIENT_ID,
+        refreshToken: storedRefreshToken
+      });
+
+    console.log('New access token:', accessToken);
+    ```
+  </Step>
+</Steps>
+
+## Multi-Factor Authentication
+
+<Steps>
+  <Step title="Enroll TOTP Factor">
+    Enroll users in TOTP-based MFA:
+
+    ```typescript
+    const { authenticationFactor, authenticationChallenge } = 
+      await workos.userManagement.enrollAuthFactor({
+        userId: 'user_123',
+        type: 'totp'
+      });
+
+    // Display authenticationFactor.totp.qrCode to user
+    console.log('QR Code:', authenticationFactor.totp?.qrCode);
+    console.log('Secret:', authenticationFactor.totp?.secret);
+    ```
+  </Step>
+
+  <Step title="Verify TOTP Code">
+    After initial password authentication, verify the TOTP code:
+
+    ```typescript
+    // First authenticate with password
+    const passwordAuth = await workos.userManagement.authenticateWithPassword({
+      clientId: process.env.WORKOS_CLIENT_ID,
+      email: 'user@example.com',
+      password: 'secure-password'
+    });
+
+    // User is prompted for MFA
+    if (passwordAuth.authenticationMethod === 'Password') {
+      // Verify TOTP code
+      const { user, accessToken } = 
+        await workos.userManagement.authenticateWithTotp({
+          clientId: process.env.WORKOS_CLIENT_ID,
+          code: '123456',
+          authenticationChallengeId: passwordAuth.authenticationChallengeId,
+          pendingAuthenticationToken: passwordAuth.pendingAuthenticationToken
+        });
+
+      console.log('MFA verified:', user.email);
+    }
+    ```
+  </Step>
+
+  <Step title="List Authentication Factors">
+    View all enrolled MFA factors for a user:
+
+    ```typescript
+    const factors = await workos.userManagement.listAuthFactors({
+      userId: 'user_123'
+    });
+
+    for await (const factor of factors.autoPagination()) {
+      console.log(factor.id, factor.type, factor.totp);
+    }
+    ```
+  </Step>
+</Steps>
+
+## Email Verification
+
+<Steps>
+  <Step title="Send Verification Email">
+    Send a verification email to a user:
+
+    ```typescript
+    const { user } = await workos.userManagement.sendVerificationEmail({
+      userId: 'user_123'
+    });
+
+    console.log('Verification sent to:', user.email);
+    ```
+  </Step>
+
+  <Step title="Verify Email with Code">
+    Complete email verification:
+
+    ```typescript
+    const { user } = await workos.userManagement.verifyEmail({
+      userId: 'user_123',
+      code: '123456'
+    });
+
+    console.log('Email verified:', user.emailVerified);
+    ```
+  </Step>
+
+  <Step title="Authenticate with Email Verification">
+    Complete authentication after email verification:
+
+    ```typescript
+    const { user, accessToken } = 
+      await workos.userManagement.authenticateWithEmailVerification({
+        clientId: process.env.WORKOS_CLIENT_ID,
+        code: '123456',
+        pendingAuthenticationToken: 'pending_token'
+      });
+    ```
+  </Step>
+</Steps>
+
+## Password Reset
+
+<Steps>
+  <Step title="Create Password Reset">
+    Generate a password reset token:
+
+    ```typescript
+    const passwordReset = await workos.userManagement.createPasswordReset({
+      email: 'user@example.com'
+    });
+
+    console.log('Reset token:', passwordReset.passwordResetToken);
+    console.log('Reset URL:', passwordReset.passwordResetUrl);
+
+    // Send passwordReset.passwordResetUrl via email
+    ```
+  </Step>
+
+  <Step title="Complete Password Reset">
+    Reset the password with the token:
+
+    ```typescript
+    const { user } = await workos.userManagement.resetPassword({
+      token: 'password_reset_token',
+      newPassword: 'new-secure-password'
+    });
+
+    console.log('Password reset for:', user.email);
+    ```
+  </Step>
+</Steps>
+
+## Managing Users
+
+### Get User
+
+```typescript
+const user = await workos.userManagement.getUser('user_123');
+
+console.log(user.email);
+console.log(user.firstName);
+console.log(user.emailVerified);
+console.log(user.createdAt);
+```
+
+### List Users
+
+```typescript
+const users = await workos.userManagement.listUsers({
+  email: 'user@example.com',
+  organizationId: 'org_123',
+  limit: 10
+});
+
+for await (const user of users.autoPagination()) {
+  console.log(user.email);
+}
+```
+
+### Update User
+
+```typescript
+const user = await workos.userManagement.updateUser({
+  userId: 'user_123',
+  firstName: 'Jane',
+  lastName: 'Smith',
+  emailVerified: true
+});
+```
+
+### Delete User
+
+```typescript
+await workos.userManagement.deleteUser('user_123');
+```
+
+## Session Management
+
+### List User Sessions
+
+```typescript
+const sessions = await workos.userManagement.listSessions('user_123');
+
+for await (const session of sessions.autoPagination()) {
+  console.log(session.id, session.ipAddress);
+}
+```
+
+### Revoke Session
+
+```typescript
+await workos.userManagement.revokeSession({
+  sessionId: 'session_123'
+});
+```
+
+### Get Logout URL
+
+```typescript
+const logoutUrl = workos.userManagement.getLogoutUrl({
+  sessionId: 'session_123',
+  returnTo: 'https://yourapp.com'
+});
+
+res.redirect(logoutUrl);
+```
+
+## Complete Authentication Example
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+import express from 'express';
+import cookieParser from 'cookie-parser';
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY, {
+  clientId: process.env.WORKOS_CLIENT_ID
+});
+
+const app = express();
+app.use(express.json());
+app.use(cookieParser());
+
+// Login endpoint
+app.post('/login', async (req, res) => {
+  try {
+    const { user, sealedSession } = 
+      await workos.userManagement.authenticateWithPassword({
+        clientId: process.env.WORKOS_CLIENT_ID,
+        email: req.body.email,
+        password: req.body.password,
+        session: {
+          sealSession: true,
+          cookiePassword: process.env.COOKIE_PASSWORD
+        }
+      });
+
+    res.cookie('wos-session', sealedSession, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax'
+    });
+
+    res.json({ user });
+  } catch (error) {
+    res.status(401).json({ error: 'Authentication failed' });
+  }
+});
+
+// Protected route
+app.get('/profile', async (req, res) => {
+  const session = await workos.userManagement.authenticateWithSessionCookie({
+    sessionData: req.cookies['wos-session'],
+    cookiePassword: process.env.COOKIE_PASSWORD
+  });
+
+  if (!session.authenticated) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  res.json({ user: session.user });
+});
+
+// Logout endpoint
+app.post('/logout', async (req, res) => {
+  const session = await workos.userManagement.getSessionFromCookie({
+    sessionData: req.cookies['wos-session'],
+    cookiePassword: process.env.COOKIE_PASSWORD
+  });
+
+  if (session) {
+    await workos.userManagement.revokeSession({
+      sessionId: session.sessionId
+    });
+  }
+
+  res.clearCookie('wos-session');
+  res.json({ success: true });
+});
+
+app.listen(3000);
+```

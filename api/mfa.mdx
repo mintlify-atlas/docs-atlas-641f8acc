@@ -1,0 +1,557 @@
+---
+title: "MFA API"
+description: "Implement multi-factor authentication with TOTP and SMS"
+---
+
+The `Mfa` class provides methods for managing multi-factor authentication (MFA) factors and challenges.
+
+## Overview
+
+WorkOS MFA supports multiple authentication factor types:
+- **TOTP** (Time-based One-Time Password): Authenticator apps like Google Authenticator, Authy
+- **SMS**: One-time codes sent via text message
+- **Generic OTP**: Custom one-time password implementations
+
+## Factor Management
+
+### enrollFactor
+
+Enrolls a new authentication factor for MFA.
+
+#### TOTP Enrollment
+
+<ParamField body="type" type="'totp'" required>
+  Factor type
+</ParamField>
+
+<ParamField body="issuer" type="string" required>
+  Name of your application (displayed in authenticator apps)
+</ParamField>
+
+<ParamField body="user" type="string" required>
+  User identifier (typically email or username)
+</ParamField>
+
+<ResponseField name="factor" type="FactorWithSecrets">
+  <ResponseField name="id" type="string">
+    Unique identifier for the factor
+  </ResponseField>
+  <ResponseField name="type" type="'totp'">
+    Factor type
+  </ResponseField>
+  <ResponseField name="totp" type="object">
+    <ResponseField name="qrCode" type="string">
+      Base64-encoded QR code image for scanning with authenticator apps
+    </ResponseField>
+    <ResponseField name="secret" type="string">
+      Secret key for manual entry
+    </ResponseField>
+    <ResponseField name="uri" type="string">
+      otpauth:// URI for deep linking to authenticator apps
+    </ResponseField>
+  </ResponseField>
+  <ResponseField name="createdAt" type="string">
+    ISO 8601 timestamp
+  </ResponseField>
+  <ResponseField name="updatedAt" type="string">
+    ISO 8601 timestamp
+  </ResponseField>
+</ResponseField>
+
+```typescript
+const factor = await workos.mfa.enrollFactor({
+  type: 'totp',
+  issuer: 'MyApp',
+  user: 'user@example.com'
+});
+
+if (factor.totp) {
+  // Display QR code to user
+  console.log('QR Code:', factor.totp.qrCode);
+  // Or provide secret for manual entry
+  console.log('Secret:', factor.totp.secret);
+}
+```
+
+#### SMS Enrollment
+
+<ParamField body="type" type="'sms'" required>
+  Factor type
+</ParamField>
+
+<ParamField body="phoneNumber" type="string" required>
+  Phone number in E.164 format (e.g., +14155551234)
+</ParamField>
+
+<ResponseField name="factor" type="FactorWithSecrets">
+  <ResponseField name="id" type="string">
+    Unique identifier for the factor
+  </ResponseField>
+  <ResponseField name="type" type="'sms'">
+    Factor type
+  </ResponseField>
+  <ResponseField name="sms" type="object">
+    <ResponseField name="phoneNumber" type="string">
+      Enrolled phone number
+    </ResponseField>
+  </ResponseField>
+  <ResponseField name="createdAt" type="string">
+    ISO 8601 timestamp
+  </ResponseField>
+</ResponseField>
+
+```typescript
+const factor = await workos.mfa.enrollFactor({
+  type: 'sms',
+  phoneNumber: '+14155551234'
+});
+
+console.log('SMS factor enrolled:', factor.id);
+```
+
+### getFactor
+
+Retrieves details of a specific authentication factor.
+
+<ParamField path="id" type="string" required>
+  The authentication factor ID
+</ParamField>
+
+<ResponseField name="factor" type="Factor">
+  <ResponseField name="id" type="string">
+    Factor ID
+  </ResponseField>
+  <ResponseField name="type" type="'totp' | 'sms' | 'generic_otp'">
+    Factor type
+  </ResponseField>
+  <ResponseField name="createdAt" type="string">
+    ISO 8601 timestamp
+  </ResponseField>
+  <ResponseField name="updatedAt" type="string">
+    ISO 8601 timestamp
+  </ResponseField>
+</ResponseField>
+
+```typescript
+const factor = await workos.mfa.getFactor('auth_factor_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5');
+console.log('Factor type:', factor.type);
+```
+
+### deleteFactor
+
+Deletes an authentication factor.
+
+<ParamField path="id" type="string" required>
+  The authentication factor ID to delete
+</ParamField>
+
+```typescript
+await workos.mfa.deleteFactor('auth_factor_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5');
+console.log('Factor deleted');
+```
+
+## Challenge & Verification
+
+### challengeFactor
+
+Creates a challenge for an authentication factor. For SMS factors, this sends the OTP code via text message.
+
+<ParamField body="authenticationFactorId" type="string" required>
+  The ID of the authentication factor to challenge
+</ParamField>
+
+<ParamField body="smsTemplate" type="string">
+  Custom SMS template (only for SMS factors). Use `{{code}}` as placeholder for the OTP code.
+</ParamField>
+
+<ResponseField name="challenge" type="Challenge">
+  <ResponseField name="id" type="string">
+    Unique identifier for the challenge
+  </ResponseField>
+  <ResponseField name="authenticationFactorId" type="string">
+    Associated factor ID
+  </ResponseField>
+  <ResponseField name="expiresAt" type="string">
+    ISO 8601 timestamp when challenge expires
+  </ResponseField>
+  <ResponseField name="code" type="string">
+    The OTP code (only included in development/test environments)
+  </ResponseField>
+  <ResponseField name="createdAt" type="string">
+    ISO 8601 timestamp
+  </ResponseField>
+  <ResponseField name="updatedAt" type="string">
+    ISO 8601 timestamp
+  </ResponseField>
+</ResponseField>
+
+```typescript
+// For TOTP factors
+const challenge = await workos.mfa.challengeFactor({
+  authenticationFactorId: 'auth_factor_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5'
+});
+
+// For SMS factors with custom template
+const smsChallenge = await workos.mfa.challengeFactor({
+  authenticationFactorId: 'auth_factor_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5',
+  smsTemplate: 'Your MyApp verification code is: {{code}}'
+});
+
+console.log('Challenge ID:', challenge.id);
+console.log('Expires at:', challenge.expiresAt);
+```
+
+### verifyChallenge
+
+Verifies a challenge with the user-provided OTP code.
+
+<ParamField body="authenticationChallengeId" type="string" required>
+  The ID of the challenge to verify
+</ParamField>
+
+<ParamField body="code" type="string" required>
+  The OTP code provided by the user
+</ParamField>
+
+<ResponseField name="result" type="VerifyResponse">
+  <ResponseField name="challenge" type="Challenge">
+    The verified challenge object
+  </ResponseField>
+  <ResponseField name="valid" type="boolean">
+    Whether the code was valid
+  </ResponseField>
+</ResponseField>
+
+```typescript
+const result = await workos.mfa.verifyChallenge({
+  authenticationChallengeId: 'auth_challenge_01HZXK8F9P3QZJQ2Z1Z2Z3Z4Z5',
+  code: '123456'
+});
+
+if (result.valid) {
+  console.log('MFA verification successful!');
+  // Proceed with authentication
+} else {
+  console.log('Invalid code');
+  // Show error to user
+}
+```
+
+## Complete MFA Flows
+
+### TOTP Enrollment Flow
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS(process.env.WORKOS_API_KEY);
+
+// Step 1: Enroll TOTP factor
+app.post('/mfa/enroll/totp', async (req, res) => {
+  const { userId, email } = req.user;
+  
+  try {
+    const factor = await workos.mfa.enrollFactor({
+      type: 'totp',
+      issuer: 'MyApp',
+      user: email
+    });
+    
+    // Store factor ID associated with user
+    await db.users.update(userId, {
+      mfaFactorId: factor.id
+    });
+    
+    res.json({
+      factorId: factor.id,
+      qrCode: factor.totp?.qrCode,
+      secret: factor.totp?.secret
+    });
+  } catch (error) {
+    console.error('TOTP enrollment error:', error);
+    res.status(500).json({ error: 'Failed to enroll TOTP' });
+  }
+});
+
+// Step 2: Verify TOTP setup
+app.post('/mfa/verify-setup', async (req, res) => {
+  const { factorId, code } = req.body;
+  
+  // Create a challenge
+  const challenge = await workos.mfa.challengeFactor({
+    authenticationFactorId: factorId
+  });
+  
+  // Verify the code
+  const result = await workos.mfa.verifyChallenge({
+    authenticationChallengeId: challenge.id,
+    code
+  });
+  
+  if (result.valid) {
+    // Mark MFA as enabled for user
+    await db.users.update(req.user.userId, {
+      mfaEnabled: true
+    });
+    res.json({ success: true });
+  } else {
+    res.status(400).json({ error: 'Invalid code' });
+  }
+});
+```
+
+### SMS Enrollment Flow
+
+```typescript
+// Step 1: Enroll SMS factor
+app.post('/mfa/enroll/sms', async (req, res) => {
+  const { phoneNumber } = req.body;
+  const { userId } = req.user;
+  
+  // Validate phone number format (E.164)
+  if (!phoneNumber.match(/^\+[1-9]\d{1,14}$/)) {
+    return res.status(400).json({ 
+      error: 'Invalid phone number format. Use E.164 format (e.g., +14155551234)' 
+    });
+  }
+  
+  try {
+    const factor = await workos.mfa.enrollFactor({
+      type: 'sms',
+      phoneNumber
+    });
+    
+    // Store factor ID
+    await db.users.update(userId, {
+      mfaFactorId: factor.id
+    });
+    
+    // Send verification code immediately
+    const challenge = await workos.mfa.challengeFactor({
+      authenticationFactorId: factor.id,
+      smsTemplate: 'Your MyApp verification code is: {{code}}'
+    });
+    
+    res.json({
+      factorId: factor.id,
+      challengeId: challenge.id,
+      message: 'Verification code sent'
+    });
+  } catch (error) {
+    console.error('SMS enrollment error:', error);
+    res.status(500).json({ error: 'Failed to enroll SMS' });
+  }
+});
+
+// Step 2: Verify SMS code
+app.post('/mfa/verify-sms', async (req, res) => {
+  const { challengeId, code } = req.body;
+  
+  const result = await workos.mfa.verifyChallenge({
+    authenticationChallengeId: challengeId,
+    code
+  });
+  
+  if (result.valid) {
+    await db.users.update(req.user.userId, {
+      mfaEnabled: true,
+      phoneVerified: true
+    });
+    res.json({ success: true });
+  } else {
+    res.status(400).json({ error: 'Invalid code' });
+  }
+});
+```
+
+### Login with MFA
+
+```typescript
+app.post('/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+  
+  // Step 1: Verify password
+  const user = await authenticateUser(email, password);
+  
+  if (!user) {
+    return res.status(401).json({ error: 'Invalid credentials' });
+  }
+  
+  // Step 2: Check if MFA is enabled
+  if (user.mfaEnabled && user.mfaFactorId) {
+    // Create MFA challenge
+    const challenge = await workos.mfa.challengeFactor({
+      authenticationFactorId: user.mfaFactorId,
+      // For SMS, optionally customize the message
+      ...(user.mfaType === 'sms' && {
+        smsTemplate: 'Your MyApp login code is: {{code}}'
+      })
+    });
+    
+    // Return challenge ID to client
+    return res.json({
+      requiresMfa: true,
+      challengeId: challenge.id,
+      userId: user.id
+    });
+  }
+  
+  // No MFA required, create session
+  const session = await createSession(user);
+  res.json({ session });
+});
+
+// Step 3: Verify MFA and complete login
+app.post('/auth/verify-mfa', async (req, res) => {
+  const { challengeId, code, userId } = req.body;
+  
+  try {
+    const result = await workos.mfa.verifyChallenge({
+      authenticationChallengeId: challengeId,
+      code
+    });
+    
+    if (!result.valid) {
+      return res.status(401).json({ error: 'Invalid MFA code' });
+    }
+    
+    // MFA verified, create session
+    const user = await db.users.findById(userId);
+    const session = await createSession(user);
+    
+    res.json({ session });
+  } catch (error) {
+    console.error('MFA verification error:', error);
+    res.status(500).json({ error: 'MFA verification failed' });
+  }
+});
+```
+
+### Managing Multiple Factors
+
+```typescript
+// List all factors for a user (using UserManagement API)
+app.get('/mfa/factors', async (req, res) => {
+  const { userId } = req.user;
+  
+  const factors = await workos.userManagement.listAuthFactors({
+    userId
+  });
+  
+  const factorList = [];
+  for await (const factor of factors) {
+    factorList.push({
+      id: factor.id,
+      type: factor.type,
+      createdAt: factor.createdAt,
+      // Include sanitized info (don't expose secrets)
+      ...(factor.sms && { phoneNumber: factor.sms.phoneNumber })
+    });
+  }
+  
+  res.json({ factors: factorList });
+});
+
+// Remove a factor
+app.delete('/mfa/factors/:factorId', async (req, res) => {
+  const { factorId } = req.params;
+  const { userId } = req.user;
+  
+  // Verify factor belongs to user
+  const factor = await workos.mfa.getFactor(factorId);
+  // Additional verification logic here
+  
+  await workos.mfa.deleteFactor(factorId);
+  
+  // Check if this was the last factor
+  const remainingFactors = await workos.userManagement.listAuthFactors({ userId });
+  const hasFactors = remainingFactors.data.length > 0;
+  
+  if (!hasFactors) {
+    await db.users.update(userId, { mfaEnabled: false });
+  }
+  
+  res.json({ success: true });
+});
+```
+
+## Error Handling
+
+```typescript
+try {
+  const challenge = await workos.mfa.challengeFactor({
+    authenticationFactorId: factorId
+  });
+  
+  const result = await workos.mfa.verifyChallenge({
+    authenticationChallengeId: challenge.id,
+    code: userCode
+  });
+} catch (error) {
+  if (error.code === 'invalid_credentials') {
+    console.error('Invalid MFA code');
+  } else if (error.code === 'challenge_expired') {
+    console.error('Challenge has expired, request a new code');
+  } else if (error.code === 'factor_not_found') {
+    console.error('Authentication factor not found');
+  } else if (error.code === 'rate_limit_exceeded') {
+    console.error('Too many attempts, please try again later');
+  } else {
+    console.error('MFA error:', error.message);
+  }
+}
+```
+
+## Best Practices
+
+1. **Secure factor storage**: Store factor IDs securely and associate them with the correct user.
+
+2. **Implement rate limiting**: Prevent brute force attacks on MFA verification.
+
+3. **Handle expiration**: Challenges expire after a set time. Allow users to request new codes.
+
+4. **Backup codes**: Implement backup/recovery codes in case users lose access to their MFA device.
+
+5. **Clear UX**: Provide clear instructions for TOTP setup (QR code + manual entry option).
+
+6. **Phone number validation**: Validate phone numbers are in E.164 format before SMS enrollment.
+
+7. **Multi-factor support**: Allow users to enroll multiple factors for redundancy.
+
+```typescript
+// Example rate limiting for MFA verification
+const verificationAttempts = new Map();
+
+app.post('/auth/verify-mfa', async (req, res) => {
+  const { challengeId, code } = req.body;
+  const key = `${req.ip}:${challengeId}`;
+  
+  // Check attempts
+  const attempts = verificationAttempts.get(key) || 0;
+  if (attempts >= 5) {
+    return res.status(429).json({ 
+      error: 'Too many attempts. Please request a new code.' 
+    });
+  }
+  
+  try {
+    const result = await workos.mfa.verifyChallenge({
+      authenticationChallengeId: challengeId,
+      code
+    });
+    
+    if (result.valid) {
+      // Clear attempts on success
+      verificationAttempts.delete(key);
+      // Create session...
+    } else {
+      // Increment attempts
+      verificationAttempts.set(key, attempts + 1);
+      res.status(401).json({ error: 'Invalid code' });
+    }
+  } catch (error) {
+    verificationAttempts.set(key, attempts + 1);
+    throw error;
+  }
+});
+```

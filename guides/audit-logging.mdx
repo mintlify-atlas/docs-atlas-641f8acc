@@ -1,0 +1,678 @@
+---
+title: "Audit Logging"
+description: "Implement compliance-ready audit logs with the WorkOS Node SDK"
+---
+
+The WorkOS Audit Logs API enables you to create tamper-proof, searchable audit trails for compliance, security investigations, and customer transparency.
+
+## Overview
+
+Audit logs capture:
+- **Who** performed an action (actor)
+- **What** action was performed
+- **When** it happened
+- **Where** it happened (location, IP)
+- **What** was affected (targets)
+
+<Note>
+WorkOS stores audit logs securely and makes them available through the Admin Portal, API exports, and Log Streams.
+</Note>
+
+## Core Concepts
+
+### Audit Log Events
+
+An audit log event represents a single action:
+
+```typescript
+interface AuditLogEvent {
+  action: string;                    // e.g., 'user.created'
+  version?: number;                  // Schema version
+  occurredAt: Date;                  // When it happened
+  actor: AuditLogActor;              // Who did it
+  targets: AuditLogTarget[];         // What was affected
+  context: {                         // Where it happened
+    location: string;                // IP address
+    userAgent?: string;
+  };
+  metadata?: Record<string, any>;    // Additional data
+}
+```
+
+### Actors
+
+Actors represent who performed the action:
+
+```typescript
+interface AuditLogActor {
+  id: string;         // Unique identifier (user_123)
+  name?: string;      // Display name (John Doe)
+  type: string;       // Actor type (user, system, api_key)
+  metadata?: Record<string, string | number | boolean>;
+}
+```
+
+### Targets
+
+Targets represent what was affected:
+
+```typescript
+interface AuditLogTarget {
+  id: string;         // Unique identifier
+  name?: string;      // Display name
+  type: string;       // Resource type (document, user, organization)
+  metadata?: Record<string, string | number | boolean>;
+}
+```
+
+## Creating Audit Logs
+
+### Basic Event
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_...');
+
+await workos.auditLogs.createEvent(
+  'org_123',  // Organization ID
+  {
+    action: 'user.login',
+    occurredAt: new Date(),
+    actor: {
+      id: 'user_456',
+      name: 'John Doe',
+      type: 'user',
+    },
+    targets: [
+      {
+        id: 'user_456',
+        type: 'user',
+      },
+    ],
+    context: {
+      location: '203.0.113.1',
+      userAgent: 'Mozilla/5.0 ...',
+    },
+  }
+);
+```
+
+### Express Middleware
+
+Automatically log all authenticated requests:
+
+```typescript
+import { Request, Response, NextFunction } from 'express';
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_...');
+
+function auditLogger(action: string) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    // Capture initial request data
+    const startTime = Date.now();
+    
+    // Wait for response to complete
+    res.on('finish', async () => {
+      try {
+        const organizationId = req.organizationId;
+        if (!organizationId) return;
+
+        await workos.auditLogs.createEvent(organizationId, {
+          action,
+          occurredAt: new Date(startTime),
+          actor: {
+            id: req.user.id,
+            name: req.user.name,
+            type: 'user',
+            metadata: {
+              email: req.user.email,
+            },
+          },
+          targets: extractTargets(req),
+          context: {
+            location: req.ip || req.socket.remoteAddress || 'unknown',
+            userAgent: req.get('user-agent'),
+          },
+          metadata: {
+            method: req.method,
+            path: req.path,
+            statusCode: res.statusCode,
+            duration: Date.now() - startTime,
+          },
+        });
+      } catch (error) {
+        // Never block requests due to audit log failures
+        console.error('Failed to create audit log:', error);
+      }
+    });
+
+    next();
+  };
+}
+
+function extractTargets(req: Request): AuditLogTarget[] {
+  const targets: AuditLogTarget[] = [];
+  
+  // Extract from route parameters
+  if (req.params.userId) {
+    targets.push({
+      id: req.params.userId,
+      type: 'user',
+    });
+  }
+  
+  if (req.params.documentId) {
+    targets.push({
+      id: req.params.documentId,
+      type: 'document',
+    });
+  }
+  
+  return targets.length > 0 ? targets : [{ id: req.user.id, type: 'user' }];
+}
+
+// Usage
+app.delete(
+  '/api/users/:userId',
+  requireAuth(),
+  auditLogger('user.deleted'),
+  async (req, res) => {
+    await deleteUser(req.params.userId);
+    res.json({ success: true });
+  }
+);
+```
+
+### Common Patterns
+
+<CodeGroup>
+
+```typescript User Actions
+// User registration
+await workos.auditLogs.createEvent(organizationId, {
+  action: 'user.created',
+  occurredAt: new Date(),
+  actor: {
+    id: 'system',
+    type: 'system',
+  },
+  targets: [{
+    id: newUser.id,
+    name: newUser.email,
+    type: 'user',
+  }],
+  context: { location: req.ip },
+});
+
+// Password change
+await workos.auditLogs.createEvent(organizationId, {
+  action: 'user.password_changed',
+  occurredAt: new Date(),
+  actor: {
+    id: user.id,
+    name: user.name,
+    type: 'user',
+  },
+  targets: [{ id: user.id, type: 'user' }],
+  context: {
+    location: req.ip,
+    userAgent: req.get('user-agent'),
+  },
+});
+```
+
+```typescript Data Access
+// Document viewed
+await workos.auditLogs.createEvent(organizationId, {
+  action: 'document.viewed',
+  occurredAt: new Date(),
+  actor: {
+    id: user.id,
+    name: user.name,
+    type: 'user',
+  },
+  targets: [{
+    id: document.id,
+    name: document.title,
+    type: 'document',
+    metadata: {
+      classification: 'confidential',
+    },
+  }],
+  context: { location: req.ip },
+});
+
+// Data exported
+await workos.auditLogs.createEvent(organizationId, {
+  action: 'data.exported',
+  occurredAt: new Date(),
+  actor: {
+    id: user.id,
+    name: user.name,
+    type: 'user',
+  },
+  targets: [{
+    id: exportId,
+    type: 'export',
+    metadata: {
+      format: 'csv',
+      recordCount: 1500,
+    },
+  }],
+  context: { location: req.ip },
+  metadata: {
+    reason: 'compliance_audit',
+  },
+});
+```
+
+```typescript Administrative Actions
+// Role assigned
+await workos.auditLogs.createEvent(organizationId, {
+  action: 'role.assigned',
+  occurredAt: new Date(),
+  actor: {
+    id: admin.id,
+    name: admin.name,
+    type: 'user',
+    metadata: { role: 'admin' },
+  },
+  targets: [
+    { id: user.id, name: user.email, type: 'user' },
+    { id: 'admin', type: 'role' },
+  ],
+  context: { location: req.ip },
+});
+
+// Settings changed
+await workos.auditLogs.createEvent(organizationId, {
+  action: 'settings.updated',
+  occurredAt: new Date(),
+  actor: {
+    id: admin.id,
+    name: admin.name,
+    type: 'user',
+  },
+  targets: [{
+    id: organizationId,
+    type: 'organization',
+  }],
+  context: { location: req.ip },
+  metadata: {
+    changes: {
+      before: { mfaRequired: false },
+      after: { mfaRequired: true },
+    },
+  },
+});
+```
+
+```typescript System Events
+// API key created
+await workos.auditLogs.createEvent(organizationId, {
+  action: 'api_key.created',
+  occurredAt: new Date(),
+  actor: {
+    id: user.id,
+    name: user.name,
+    type: 'user',
+  },
+  targets: [{
+    id: apiKey.id,
+    name: apiKey.name,
+    type: 'api_key',
+  }],
+  context: { location: req.ip },
+});
+
+// Webhook triggered
+await workos.auditLogs.createEvent(organizationId, {
+  action: 'webhook.triggered',
+  occurredAt: new Date(),
+  actor: {
+    id: 'system',
+    type: 'system',
+  },
+  targets: [{
+    id: webhook.id,
+    type: 'webhook',
+  }],
+  context: { location: 'internal' },
+  metadata: {
+    event: 'user.created',
+    statusCode: 200,
+  },
+});
+```
+
+</CodeGroup>
+
+## Idempotency
+
+Audit log events are automatically idempotent:
+
+```typescript
+// SDK auto-generates idempotency key
+await workos.auditLogs.createEvent(organizationId, event);
+```
+
+For custom idempotency:
+
+```typescript
+await workos.auditLogs.createEvent(
+  organizationId,
+  event,
+  {
+    idempotencyKey: `user-login-${userId}-${timestamp}`,
+  }
+);
+```
+
+<Note>
+Idempotency keys are valid for 24 hours. The SDK generates UUIDs by default using `crypto.randomUUID()`.
+</Note>
+
+## Exporting Audit Logs
+
+Export audit logs for compliance, archival, or analysis:
+
+```typescript
+// Create export
+const exportResult = await workos.auditLogs.createExport({
+  organizationId: 'org_123',
+  rangeStart: new Date('2024-01-01'),
+  rangeEnd: new Date('2024-01-31'),
+  actions: ['user.created', 'user.deleted', 'data.exported'],
+  actorNames: ['John Doe', 'Jane Smith'],
+  actorIds: ['user_456', 'user_789'],
+});
+
+console.log(exportResult.id); // audit_log_export_123
+console.log(exportResult.state); // pending
+```
+
+### Polling for Completion
+
+```typescript
+async function waitForExport(exportId: string): Promise<string> {
+  let attempts = 0;
+  const maxAttempts = 30;
+  
+  while (attempts < maxAttempts) {
+    const exportData = await workos.auditLogs.getExport(exportId);
+    
+    if (exportData.state === 'ready') {
+      return exportData.url!;
+    }
+    
+    if (exportData.state === 'error') {
+      throw new Error('Export failed');
+    }
+    
+    // Wait 2 seconds before next check
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    attempts++;
+  }
+  
+  throw new Error('Export timeout');
+}
+
+const downloadUrl = await waitForExport(exportResult.id);
+console.log('Download:', downloadUrl);
+```
+
+### Automated Monthly Exports
+
+```typescript
+import cron from 'node-cron';
+
+// Run on first day of each month at 1 AM
+cron.schedule('0 1 1 * *', async () => {
+  const now = new Date();
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  
+  const organizations = await getOrganizations();
+  
+  for (const org of organizations) {
+    try {
+      const exportResult = await workos.auditLogs.createExport({
+        organizationId: org.id,
+        rangeStart: lastMonth,
+        rangeEnd: lastMonthEnd,
+      });
+      
+      const url = await waitForExport(exportResult.id);
+      
+      // Archive to S3, send to SIEM, etc.
+      await archiveAuditLogs(org.id, url);
+    } catch (error) {
+      console.error(`Failed to export for ${org.id}:`, error);
+    }
+  }
+});
+```
+
+## Audit Log Schemas
+
+Define structured schemas for consistent audit log formats:
+
+```typescript
+await workos.auditLogs.createSchema(
+  {
+    action: 'user.created',
+    targets: [
+      {
+        type: 'user',
+        fields: [
+          {
+            name: 'email',
+            type: 'string',
+            required: true,
+          },
+          {
+            name: 'role',
+            type: 'string',
+            required: false,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    idempotencyKey: 'schema-user-created',
+  }
+);
+```
+
+Schemas help ensure:
+- Consistent audit log structure
+- Required fields are present
+- Proper data types
+- Better searchability in Admin Portal
+
+## Advanced Patterns
+
+### Audit Log Decorator
+
+```typescript
+function Audit(action: string) {
+  return function (
+    target: any,
+    propertyKey: string,
+    descriptor: PropertyDescriptor
+  ) {
+    const originalMethod = descriptor.value;
+
+    descriptor.value = async function (...args: any[]) {
+      const startTime = Date.now();
+      const context = this; // Class instance
+      
+      try {
+        const result = await originalMethod.apply(context, args);
+        
+        // Log success
+        await workos.auditLogs.createEvent(context.organizationId, {
+          action: `${action}.success`,
+          occurredAt: new Date(startTime),
+          actor: {
+            id: context.userId,
+            type: 'user',
+          },
+          targets: extractTargetsFromArgs(args),
+          context: {
+            location: context.ipAddress,
+          },
+          metadata: {
+            duration: Date.now() - startTime,
+          },
+        });
+        
+        return result;
+      } catch (error) {
+        // Log failure
+        await workos.auditLogs.createEvent(context.organizationId, {
+          action: `${action}.failed`,
+          occurredAt: new Date(startTime),
+          actor: {
+            id: context.userId,
+            type: 'user',
+          },
+          targets: extractTargetsFromArgs(args),
+          context: {
+            location: context.ipAddress,
+          },
+          metadata: {
+            error: error.message,
+            duration: Date.now() - startTime,
+          },
+        });
+        
+        throw error;
+      }
+    };
+
+    return descriptor;
+  };
+}
+
+class UserService {
+  @Audit('user.deleted')
+  async deleteUser(userId: string) {
+    // Delete user logic
+  }
+}
+```
+
+### Batch Logging with Queue
+
+```typescript
+import Queue from 'bull';
+
+const auditQueue = new Queue('audit-logs', 'redis://localhost:6379');
+
+auditQueue.process(async (job) => {
+  const { organizationId, event } = job.data;
+  await workos.auditLogs.createEvent(organizationId, event);
+});
+
+// Add to queue instead of blocking requests
+function queueAuditLog(organizationId: string, event: AuditLogEvent) {
+  auditQueue.add({ organizationId, event }, {
+    attempts: 3,
+    backoff: {
+      type: 'exponential',
+      delay: 2000,
+    },
+  });
+}
+
+app.post('/api/users', async (req, res) => {
+  const user = await createUser(req.body);
+  
+  // Queue audit log asynchronously
+  queueAuditLog(req.organizationId, {
+    action: 'user.created',
+    occurredAt: new Date(),
+    actor: { id: req.user.id, type: 'user' },
+    targets: [{ id: user.id, type: 'user' }],
+    context: { location: req.ip },
+  });
+  
+  res.json(user);
+});
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Never Block User Requests">
+    Wrap audit log calls in try-catch and handle failures gracefully:
+    ```typescript
+    try {
+      await workos.auditLogs.createEvent(organizationId, event);
+    } catch (error) {
+      // Log error but don't fail the request
+      console.error('Audit log failed:', error);
+    }
+    ```
+  </Step>
+  
+  <Step title="Use Meaningful Action Names">
+    Follow a consistent naming convention:
+    - `resource.action` (e.g., `user.created`, `document.deleted`)
+    - Be specific: `settings.mfa_enabled` not `settings.updated`
+  </Step>
+  
+  <Step title="Include Rich Context">
+    Capture IP addresses, user agents, and relevant metadata for investigations:
+    ```typescript
+    context: {
+      location: req.ip || 'unknown',
+      userAgent: req.get('user-agent'),
+    },
+    metadata: {
+      method: req.method,
+      path: req.path,
+      statusCode: res.statusCode,
+    }
+    ```
+  </Step>
+  
+  <Step title="Log Both Success and Failure">
+    Track failed attempts for security monitoring:
+    ```typescript
+    action: success ? 'user.login' : 'user.login_failed',
+    metadata: success ? {} : { reason: 'invalid_password' },
+    ```
+  </Step>
+  
+  <Step title="Use Idempotency for Retries">
+    Prevent duplicate logs when retrying failed requests:
+    ```typescript
+    idempotencyKey: `${action}-${resourceId}-${timestamp}`
+    ```
+  </Step>
+</Steps>
+
+## Compliance Considerations
+
+Audit logs help meet requirements for:
+- **SOC 2**: System monitoring and logging
+- **HIPAA**: Access logs for protected health information
+- **GDPR**: Records of processing activities
+- **PCI DSS**: Tracking access to cardholder data
+
+For retention policies, WorkOS stores audit logs for:
+- **Standard**: 1 year
+- **Enterprise**: Custom retention periods available
+
+## API Reference
+
+See the source code for implementation details:
+- `createEvent()` - src/audit-logs/audit-logs.ts:28
+- `createExport()` - src/audit-logs/audit-logs.ts:51
+- `getExport()` - src/audit-logs/audit-logs.ts:60
+- `createSchema()` - src/audit-logs/audit-logs.ts:68

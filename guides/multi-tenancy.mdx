@@ -1,0 +1,776 @@
+---
+title: "Multi-Tenancy Patterns"
+description: "Building secure, scalable multi-tenant SaaS applications with WorkOS Organizations"
+---
+
+The WorkOS Node SDK provides comprehensive organization management capabilities for building B2B SaaS applications with proper tenant isolation, role-based access control, and enterprise features.
+
+## Core Concepts
+
+### Organizations
+
+Organizations represent tenant accounts in your application:
+
+```typescript
+interface Organization {
+  id: string;                              // org_123
+  name: string;                            // Acme Corp
+  allowProfilesOutsideOrganization: boolean;
+  domains: OrganizationDomain[];           // Verified domains
+  createdAt: string;
+  updatedAt: string;
+  externalId: string | null;               // Your internal ID
+  metadata: Record<string, string>;        // Custom data
+}
+```
+
+### Organization Memberships
+
+Users belong to organizations through memberships, which define their role and permissions.
+
+## Organization Management
+
+### Creating Organizations
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_...');
+
+const organization = await workos.organizations.createOrganization({
+  name: 'Acme Corporation',
+  domainData: [
+    {
+      domain: 'acme.com',
+      state: 'verified',
+    },
+  ],
+  externalId: 'acme_corp_123', // Your internal tenant ID
+  metadata: {
+    plan: 'enterprise',
+    industry: 'technology',
+    employeeCount: '500',
+  },
+});
+```
+
+<Note>
+Use `externalId` to link WorkOS organizations with your internal tenant IDs for easy lookups.
+</Note>
+
+### Self-Service Organization Creation
+
+Let users create their own organizations during signup:
+
+```typescript
+app.post('/api/signup', async (req, res) => {
+  const { email, password, companyName } = req.body;
+  
+  try {
+    // Create organization first
+    const organization = await workos.organizations.createOrganization(
+      {
+        name: companyName,
+        metadata: {
+          plan: 'free',
+          createdVia: 'self_signup',
+        },
+      },
+      {
+        idempotencyKey: `org-${email}-${Date.now()}`,
+      }
+    );
+    
+    // Create user
+    const user = await workos.userManagement.createUser({
+      email,
+      password,
+    });
+    
+    // Add user to organization as owner
+    await workos.userManagement.createOrganizationMembership({
+      userId: user.id,
+      organizationId: organization.id,
+      roleSlug: 'owner',
+    });
+    
+    res.json({ organization, user });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+```
+
+### Listing and Searching Organizations
+
+```typescript
+// List all organizations
+const organizations = await workos.organizations.listOrganizations();
+
+for await (const org of organizations) {
+  console.log(org.name, org.id);
+}
+
+// Filter by domain
+const acmeOrgs = await workos.organizations.listOrganizations({
+  domains: ['acme.com'],
+});
+
+// Pagination
+const firstPage = await workos.organizations.listOrganizations({
+  limit: 10,
+});
+
+for await (const org of firstPage) {
+  console.log(org.name);
+}
+```
+
+### Updating Organizations
+
+```typescript
+const updated = await workos.organizations.updateOrganization({
+  organization: 'org_123',
+  name: 'Acme Corporation Inc.',
+  domainData: [
+    {
+      domain: 'acme.com',
+      state: 'verified',
+    },
+    {
+      domain: 'acmecorp.com',
+      state: 'verified',
+    },
+  ],
+  metadata: {
+    plan: 'enterprise',
+    seats: '50',
+  },
+});
+```
+
+### Retrieving Organizations
+
+```typescript
+// By WorkOS ID
+const org = await workos.organizations.getOrganization('org_123');
+
+// By your external ID
+const org = await workos.organizations.getOrganizationByExternalId(
+  'acme_corp_123'
+);
+```
+
+## Tenant Isolation
+
+### Request-Scoped Middleware
+
+Ensure every request is scoped to a single organization:
+
+```typescript
+import { Request, Response, NextFunction } from 'express';
+
+async function requireOrganization(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  const organizationId = req.headers['x-organization-id'] as string;
+  
+  if (!organizationId) {
+    return res.status(400).json({ 
+      error: 'Missing organization context',
+    });
+  }
+  
+  try {
+    // Verify organization exists and user has access
+    const memberships = await workos.userManagement.listOrganizationMemberships({
+      userId: req.user.id,
+      organizationId,
+    });
+    
+    let hasMembership = false;
+    for await (const membership of memberships) {
+      if (membership.organizationId === organizationId) {
+        hasMembership = true;
+        req.membership = membership;
+        break;
+      }
+    }
+    
+    if (!hasMembership) {
+      return res.status(403).json({ 
+        error: 'Not a member of this organization',
+      });
+    }
+    
+    // Fetch organization details
+    req.organization = await workos.organizations.getOrganization(
+      organizationId
+    );
+    
+    next();
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to verify organization access' });
+  }
+}
+
+// Usage
+app.get(
+  '/api/data',
+  requireAuth(),
+  requireOrganization,
+  async (req, res) => {
+    // All queries scoped to req.organization.id
+    const data = await db.data.findMany({
+      where: { organizationId: req.organization.id },
+    });
+    
+    res.json(data);
+  }
+);
+```
+
+### Database-Level Isolation
+
+<CodeGroup>
+
+```typescript Row-Level Security (Postgres)
+-- Create organizations table
+CREATE TABLE organizations (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- All tenant data includes organization_id
+CREATE TABLE documents (
+  id SERIAL PRIMARY KEY,
+  organization_id TEXT NOT NULL REFERENCES organizations(id),
+  title TEXT NOT NULL,
+  content TEXT
+);
+
+-- Enable RLS
+ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Users can only see their org's data
+CREATE POLICY organization_isolation ON documents
+  FOR ALL
+  USING (organization_id = current_setting('app.current_organization_id')::TEXT);
+
+// Set organization context in each request
+app.use(async (req, res, next) => {
+  if (req.organization) {
+    await db.query(
+      "SET LOCAL app.current_organization_id = $1",
+      [req.organization.id]
+    );
+  }
+  next();
+});
+```
+
+```typescript Schema-Per-Tenant (Postgres)
+// Create schema for each organization
+async function provisionOrganization(organizationId: string) {
+  const schemaName = `org_${organizationId.replace('org_', '')}`;
+  
+  await db.query(`CREATE SCHEMA IF NOT EXISTS ${schemaName}`);
+  
+  await db.query(`
+    CREATE TABLE ${schemaName}.documents (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      content TEXT
+    )
+  `);
+  
+  return schemaName;
+}
+
+// Query the correct schema
+app.get('/api/documents', async (req, res) => {
+  const schemaName = getSchemaName(req.organization.id);
+  
+  const documents = await db.query(
+    `SELECT * FROM ${schemaName}.documents`
+  );
+  
+  res.json(documents.rows);
+});
+```
+
+```typescript ORM with Tenant Filtering (Prisma)
+// middleware.ts
+import { Prisma } from '@prisma/client';
+
+export function createTenantPrisma(organizationId: string) {
+  return new PrismaClient().$extends({
+    query: {
+      $allModels: {
+        async findMany({ args, query }) {
+          args.where = { 
+            ...args.where, 
+            organizationId 
+          };
+          return query(args);
+        },
+        async findFirst({ args, query }) {
+          args.where = { 
+            ...args.where, 
+            organizationId 
+          };
+          return query(args);
+        },
+        async create({ args, query }) {
+          args.data = { 
+            ...args.data, 
+            organizationId 
+          };
+          return query(args);
+        },
+        async update({ args, query }) {
+          args.where = { 
+            ...args.where, 
+            organizationId 
+          };
+          return query(args);
+        },
+        async delete({ args, query }) {
+          args.where = { 
+            ...args.where, 
+            organizationId 
+          };
+          return query(args);
+        },
+      },
+    },
+  });
+}
+
+// Usage
+app.get('/api/documents', async (req, res) => {
+  const db = createTenantPrisma(req.organization.id);
+  const documents = await db.document.findMany();
+  res.json(documents);
+});
+```
+
+</CodeGroup>
+
+## Multi-Organization Users
+
+Many B2B apps allow users to belong to multiple organizations:
+
+### Organization Switcher
+
+```typescript
+app.get('/api/user/organizations', requireAuth(), async (req, res) => {
+  const memberships = await workos.userManagement.listOrganizationMemberships({
+    userId: req.user.id,
+  });
+  
+  const organizations = [];
+  for await (const membership of memberships) {
+    const org = await workos.organizations.getOrganization(
+      membership.organizationId
+    );
+    
+    organizations.push({
+      id: org.id,
+      name: org.name,
+      role: membership.roleSlug,
+      status: membership.status,
+    });
+  }
+  
+  res.json({ organizations });
+});
+```
+
+### Switch Active Organization
+
+```typescript
+app.post('/api/user/switch-organization', requireAuth(), async (req, res) => {
+  const { organizationId } = req.body;
+  
+  // Verify user is a member
+  const memberships = await workos.userManagement.listOrganizationMemberships({
+    userId: req.user.id,
+    organizationId,
+  });
+  
+  let hasMembership = false;
+  for await (const membership of memberships) {
+    if (membership.organizationId === organizationId) {
+      hasMembership = true;
+      break;
+    }
+  }
+  
+  if (!hasMembership) {
+    return res.status(403).json({ error: 'Not a member' });
+  }
+  
+  // Refresh session with new organization context
+  const session = workos.userManagement.loadSealedSession({
+    sessionData: req.cookies['wos-session'],
+    cookiePassword: process.env.WORKOS_COOKIE_PASSWORD!,
+  });
+  
+  const refreshed = await session.refresh({
+    organizationId,
+  });
+  
+  if (!refreshed.authenticated) {
+    return res.status(401).json({ error: 'Session refresh failed' });
+  }
+  
+  res.cookie('wos-session', refreshed.sealedSession, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax',
+  });
+  
+  res.json({ success: true, organizationId });
+});
+```
+
+## Role-Based Access Control
+
+### List Organization Roles
+
+```typescript
+const roles = await workos.organizations.listOrganizationRoles({
+  organizationId: 'org_123',
+});
+
+console.log(roles.data); // [{ slug: 'owner', name: 'Owner' }, ...]
+```
+
+### Check User Role
+
+```typescript
+function requireRole(...allowedRoles: string[]) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.membership) {
+      return res.status(403).json({ error: 'No organization membership' });
+    }
+    
+    if (!allowedRoles.includes(req.membership.roleSlug)) {
+      return res.status(403).json({ 
+        error: `Requires one of: ${allowedRoles.join(', ')}`,
+      });
+    }
+    
+    next();
+  };
+}
+
+app.delete(
+  '/api/organizations/:orgId/users/:userId',
+  requireAuth(),
+  requireOrganization,
+  requireRole('admin', 'owner'),
+  async (req, res) => {
+    // Only admins and owners can delete users
+    await workos.userManagement.deleteUser(req.params.userId);
+    res.json({ success: true });
+  }
+);
+```
+
+### Managing Memberships
+
+```typescript
+// Add user to organization
+const membership = await workos.userManagement.createOrganizationMembership({
+  userId: 'user_123',
+  organizationId: 'org_456',
+  roleSlug: 'member',
+});
+
+// Update role
+const updated = await workos.userManagement.updateOrganizationMembership(
+  membership.id,
+  {
+    roleSlug: 'admin',
+  }
+);
+
+// Deactivate (soft delete)
+const deactivated = await workos.userManagement.deactivateOrganizationMembership(
+  membership.id
+);
+
+// Reactivate
+const reactivated = await workos.userManagement.reactivateOrganizationMembership(
+  membership.id
+);
+
+// Permanently delete
+await workos.userManagement.deleteOrganizationMembership(membership.id);
+```
+
+## Invitations
+
+Invite users to join organizations:
+
+```typescript
+app.post('/api/invitations', requireAuth(), requireRole('admin', 'owner'), async (req, res) => {
+  const { email, roleSlug } = req.body;
+  
+  const invitation = await workos.userManagement.sendInvitation({
+    email,
+    organizationId: req.organization.id,
+    inviterUserId: req.user.id,
+    roleSlug,
+    expiresInDays: 7,
+  });
+  
+  res.json({ invitation });
+});
+
+// List pending invitations
+app.get('/api/invitations', requireAuth(), async (req, res) => {
+  const invitations = await workos.userManagement.listInvitations({
+    organizationId: req.organization.id,
+  });
+  
+  const pending = [];
+  for await (const invitation of invitations) {
+    if (invitation.state === 'pending') {
+      pending.push(invitation);
+    }
+  }
+  
+  res.json({ invitations: pending });
+});
+
+// Revoke invitation
+app.delete('/api/invitations/:id', requireAuth(), async (req, res) => {
+  await workos.userManagement.revokeInvitation(req.params.id);
+  res.json({ success: true });
+});
+```
+
+## Feature Flags
+
+Manage per-organization feature access:
+
+```typescript
+// List organization features
+const features = await workos.organizations.listOrganizationFeatureFlags({
+  organizationId: 'org_123',
+});
+
+for await (const feature of features) {
+  console.log(feature.key, feature.enabled);
+}
+
+// Check feature access
+async function hasFeature(
+  organizationId: string,
+  featureKey: string
+): Promise<boolean> {
+  const features = await workos.organizations.listOrganizationFeatureFlags({
+    organizationId,
+  });
+  
+  for await (const feature of features) {
+    if (feature.key === featureKey) {
+      return feature.enabled;
+    }
+  }
+  
+  return false;
+}
+
+// Feature gate middleware
+function requireFeature(featureKey: string) {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const enabled = await hasFeature(req.organization.id, featureKey);
+    
+    if (!enabled) {
+      return res.status(403).json({ 
+        error: `Feature '${featureKey}' not available for this organization`,
+      });
+    }
+    
+    next();
+  };
+}
+
+app.get(
+  '/api/advanced-analytics',
+  requireAuth(),
+  requireOrganization,
+  requireFeature('advanced_analytics'),
+  async (req, res) => {
+    // Only available to orgs with advanced_analytics enabled
+    res.json({ analytics: [] });
+  }
+);
+```
+
+## Organization API Keys
+
+Provide organization-scoped API keys for customers:
+
+```typescript
+// Create org API key
+const apiKey = await workos.organizations.createOrganizationApiKey(
+  {
+    organizationId: 'org_123',
+    name: 'Production API Key',
+  },
+  {
+    idempotencyKey: `api-key-${Date.now()}`,
+  }
+);
+
+console.log(apiKey.secret); // Only shown once!
+
+// List API keys
+const keys = await workos.organizations.listOrganizationApiKeys({
+  organizationId: 'org_123',
+});
+
+for await (const key of keys) {
+  console.log(key.name, key.createdAt);
+}
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Always Validate Organization Access">
+    Never trust organization IDs from client requests. Always verify the user has access:
+    ```typescript
+    const memberships = await workos.userManagement.listOrganizationMemberships({
+      userId: req.user.id,
+      organizationId: req.body.organizationId,
+    });
+    // Verify membership exists
+    ```
+  </Step>
+  
+  <Step title="Scope All Queries to Organization">
+    Include `organizationId` in every database query:
+    ```typescript
+    const data = await db.data.findMany({
+      where: { 
+        organizationId: req.organization.id,
+        // other filters
+      },
+    });
+    ```
+  </Step>
+  
+  <Step title="Use External IDs for Integration">
+    Link WorkOS organizations to your existing tenant IDs:
+    ```typescript
+    await workos.organizations.createOrganization({
+      name,
+      externalId: yourInternalTenantId,
+    });
+    ```
+  </Step>
+  
+  <Step title="Implement Organization Switching">
+    For users in multiple orgs, provide a clear organization context:
+    ```typescript
+    // Include current org in every response
+    res.json({
+      data: results,
+      organization: { id: req.organization.id, name: req.organization.name },
+    });
+    ```
+  </Step>
+  
+  <Step title="Track Organization in Audit Logs">
+    All audit logs should include organization context:
+    ```typescript
+    await workos.auditLogs.createEvent(req.organization.id, event);
+    ```
+  </Step>
+</Steps>
+
+## Complete Example: Multi-Tenant API
+
+```typescript
+import express from 'express';
+import { WorkOS } from '@workos-inc/node';
+
+const app = express();
+const workos = new WorkOS('sk_...');
+
+// Middleware: Load organization context
+app.use(async (req, res, next) => {
+  const orgId = req.headers['x-organization-id'];
+  if (!orgId) return next();
+  
+  try {
+    req.organization = await workos.organizations.getOrganization(
+      orgId as string
+    );
+  } catch {}
+  
+  next();
+});
+
+// Organization routes
+app.post('/api/organizations', requireAuth(), async (req, res) => {
+  const org = await workos.organizations.createOrganization({
+    name: req.body.name,
+    externalId: generateTenantId(),
+  });
+  
+  await workos.userManagement.createOrganizationMembership({
+    userId: req.user.id,
+    organizationId: org.id,
+    roleSlug: 'owner',
+  });
+  
+  res.json({ organization: org });
+});
+
+// Tenant-scoped data access
+app.get('/api/documents', requireAuth(), requireOrganization, async (req, res) => {
+  const documents = await db.document.findMany({
+    where: { organizationId: req.organization.id },
+  });
+  
+  res.json({ documents });
+});
+
+// Admin-only endpoints
+app.post(
+  '/api/invitations',
+  requireAuth(),
+  requireOrganization,
+  requireRole('admin', 'owner'),
+  async (req, res) => {
+    const invitation = await workos.userManagement.sendInvitation({
+      email: req.body.email,
+      organizationId: req.organization.id,
+      inviterUserId: req.user.id,
+    });
+    
+    res.json({ invitation });
+  }
+);
+
+app.listen(3000);
+```
+
+## API Reference
+
+See the source code for implementation details:
+- `createOrganization()` - src/organizations/organizations.ts:66
+- `listOrganizations()` - src/organizations/organizations.ts:45
+- `getOrganization()` - src/organizations/organizations.ts:83
+- `updateOrganization()` - src/organizations/organizations.ts:99
+- `listOrganizationMemberships()` - src/user-management/user-management.ts:906

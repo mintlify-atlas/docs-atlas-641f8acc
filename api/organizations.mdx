@@ -1,0 +1,370 @@
+---
+title: Organizations API
+description: Manage organizations using the WorkOS SDK
+---
+
+The Organizations API allows you to create, retrieve, update, and delete organizations, as well as manage organization-specific resources like roles, feature flags, and API keys.
+
+## Initialize
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_example_123456789');
+```
+
+## Methods
+
+### listOrganizations
+
+Retrieve a list of organizations.
+
+```typescript
+const organizations = await workos.organizations.listOrganizations({
+  domains: ['example.com'],
+  limit: 10,
+});
+
+for await (const organization of organizations) {
+  console.log(organization.id, organization.name);
+}
+```
+
+<ParamField path="options" type="ListOrganizationsOptions" optional>
+  Options for filtering and paginating organizations.
+
+  <Expandable title="properties">
+    <ParamField path="domains" type="string[]" optional>
+      Filter organizations by domains.
+    </ParamField>
+    <ParamField path="before" type="string" optional>
+      Cursor for pagination, fetching records before this ID.
+    </ParamField>
+    <ParamField path="after" type="string" optional>
+      Cursor for pagination, fetching records after this ID.
+    </ParamField>
+    <ParamField path="limit" type="number" optional>
+      Maximum number of records to return (default: 10).
+    </ParamField>
+    <ParamField path="order" type="'asc' | 'desc'" optional>
+      Sort order for results.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="organizations" type="AutoPaginatable<Organization>">
+  An auto-paginatable list of organizations.
+
+  <Expandable title="Organization properties">
+    <ResponseField name="object" type="'organization'">
+      Object type identifier.
+    </ResponseField>
+    <ResponseField name="id" type="string">
+      Unique identifier for the organization.
+    </ResponseField>
+    <ResponseField name="name" type="string">
+      Name of the organization.
+    </ResponseField>
+    <ResponseField name="allowProfilesOutsideOrganization" type="boolean">
+      Whether profiles outside the organization are allowed.
+    </ResponseField>
+    <ResponseField name="domains" type="OrganizationDomain[]">
+      List of verified and pending domains.
+    </ResponseField>
+    <ResponseField name="stripeCustomerId" type="string" optional>
+      Stripe customer ID if configured.
+    </ResponseField>
+    <ResponseField name="externalId" type="string | null">
+      External identifier for the organization.
+    </ResponseField>
+    <ResponseField name="metadata" type="Record<string, string>">
+      Custom metadata key-value pairs.
+    </ResponseField>
+    <ResponseField name="createdAt" type="string">
+      ISO-8601 timestamp of creation.
+    </ResponseField>
+    <ResponseField name="updatedAt" type="string">
+      ISO-8601 timestamp of last update.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+### createOrganization
+
+Create a new organization.
+
+```typescript
+const organization = await workos.organizations.createOrganization({
+  name: 'Acme Corporation',
+  domainData: [
+    { domain: 'acme.com', state: 'verified' },
+  ],
+  externalId: 'external_123',
+  metadata: { industry: 'technology' },
+});
+```
+
+<ParamField path="payload" type="CreateOrganizationOptions" required>
+  The organization data.
+
+  <Expandable title="properties">
+    <ParamField path="name" type="string" required>
+      Name of the organization.
+    </ParamField>
+    <ParamField path="domainData" type="DomainData[]" optional>
+      Array of domain objects to associate with the organization.
+    </ParamField>
+    <ParamField path="externalId" type="string | null" optional>
+      External identifier for syncing with your system.
+    </ParamField>
+    <ParamField path="metadata" type="Record<string, string>" optional>
+      Custom metadata as key-value pairs.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="requestOptions" type="CreateOrganizationRequestOptions" optional>
+  <Expandable title="properties">
+    <ParamField path="idempotencyKey" type="string" optional>
+      Unique key to ensure idempotent requests.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="organization" type="Organization">
+  The created organization object.
+</ResponseField>
+
+---
+
+### getOrganization
+
+Retrieve an organization by ID.
+
+```typescript
+const organization = await workos.organizations.getOrganization('org_123');
+```
+
+<ParamField path="id" type="string" required>
+  The unique identifier of the organization.
+</ParamField>
+
+<ResponseField name="organization" type="Organization">
+  The organization object.
+</ResponseField>
+
+---
+
+### getOrganizationByExternalId
+
+Retrieve an organization by external ID.
+
+```typescript
+const organization = await workos.organizations.getOrganizationByExternalId('external_123');
+```
+
+<ParamField path="externalId" type="string" required>
+  The external identifier of the organization.
+</ParamField>
+
+<ResponseField name="organization" type="Organization">
+  The organization object.
+</ResponseField>
+
+---
+
+### updateOrganization
+
+Update an existing organization.
+
+```typescript
+const organization = await workos.organizations.updateOrganization({
+  organization: 'org_123',
+  name: 'Acme Corp (Updated)',
+  metadata: { industry: 'fintech' },
+});
+```
+
+<ParamField path="options" type="UpdateOrganizationOptions" required>
+  <Expandable title="properties">
+    <ParamField path="organization" type="string" required>
+      The ID of the organization to update.
+    </ParamField>
+    <ParamField path="name" type="string" optional>
+      Updated name of the organization.
+    </ParamField>
+    <ParamField path="domainData" type="DomainData[]" optional>
+      Updated domain data.
+    </ParamField>
+    <ParamField path="metadata" type="Record<string, string>" optional>
+      Updated metadata.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="organization" type="Organization">
+  The updated organization object.
+</ResponseField>
+
+---
+
+### deleteOrganization
+
+Delete an organization.
+
+```typescript
+await workos.organizations.deleteOrganization('org_123');
+```
+
+<ParamField path="id" type="string" required>
+  The unique identifier of the organization to delete.
+</ParamField>
+
+---
+
+### listOrganizationRoles
+
+Retrieve all roles for an organization.
+
+```typescript
+const roleList = await workos.organizations.listOrganizationRoles({
+  organizationId: 'org_123',
+});
+
+console.log(roleList.data);
+```
+
+<ParamField path="options" type="ListOrganizationRolesOptions" required>
+  <Expandable title="properties">
+    <ParamField path="organizationId" type="string" required>
+      The ID of the organization.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="roleList" type="RoleList">
+  <Expandable title="properties">
+    <ResponseField name="object" type="'list'">
+      Object type identifier.
+    </ResponseField>
+    <ResponseField name="data" type="Role[]">
+      Array of role objects.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+---
+
+### listOrganizationFeatureFlags
+
+Retrieve feature flags for an organization.
+
+```typescript
+const featureFlags = await workos.organizations.listOrganizationFeatureFlags({
+  organizationId: 'org_123',
+  limit: 20,
+});
+
+for await (const flag of featureFlags) {
+  console.log(flag.key, flag.enabled);
+}
+```
+
+<ParamField path="options" type="ListOrganizationFeatureFlagsOptions" required>
+  <Expandable title="properties">
+    <ParamField path="organizationId" type="string" required>
+      The ID of the organization.
+    </ParamField>
+    <ParamField path="before" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+    <ParamField path="after" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+    <ParamField path="limit" type="number" optional>
+      Maximum number of records to return.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="featureFlags" type="AutoPaginatable<FeatureFlag>">
+  An auto-paginatable list of feature flags.
+</ResponseField>
+
+---
+
+### listOrganizationApiKeys
+
+Retrieve API keys for an organization.
+
+```typescript
+const apiKeys = await workos.organizations.listOrganizationApiKeys({
+  organizationId: 'org_123',
+  limit: 10,
+});
+
+for await (const apiKey of apiKeys) {
+  console.log(apiKey.id, apiKey.name);
+}
+```
+
+<ParamField path="options" type="ListOrganizationApiKeysOptions" required>
+  <Expandable title="properties">
+    <ParamField path="organizationId" type="string" required>
+      The ID of the organization.
+    </ParamField>
+    <ParamField path="before" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+    <ParamField path="after" type="string" optional>
+      Cursor for pagination.
+    </ParamField>
+    <ParamField path="limit" type="number" optional>
+      Maximum number of records to return.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="apiKeys" type="AutoPaginatable<ApiKey>">
+  An auto-paginatable list of API keys.
+</ResponseField>
+
+---
+
+### createOrganizationApiKey
+
+Create an API key for an organization.
+
+```typescript
+const apiKey = await workos.organizations.createOrganizationApiKey({
+  organizationId: 'org_123',
+  name: 'Production API Key',
+});
+
+console.log(apiKey.secret); // Only returned on creation
+```
+
+<ParamField path="options" type="CreateOrganizationApiKeyOptions" required>
+  <Expandable title="properties">
+    <ParamField path="organizationId" type="string" required>
+      The ID of the organization.
+    </ParamField>
+    <ParamField path="name" type="string" required>
+      Name for the API key.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ParamField path="requestOptions" type="CreateOrganizationApiKeyRequestOptions" optional>
+  <Expandable title="properties">
+    <ParamField path="idempotencyKey" type="string" optional>
+      Unique key to ensure idempotent requests.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+<ResponseField name="createdApiKey" type="CreatedApiKey">
+  The created API key object including the secret (only returned once).
+</ResponseField>

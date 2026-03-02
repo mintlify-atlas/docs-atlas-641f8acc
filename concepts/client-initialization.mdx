@@ -1,0 +1,332 @@
+---
+title: Client initialization
+description: How to initialize and configure the WorkOS client
+---
+
+The WorkOS client is the entry point for all SDK operations. This guide covers initialization patterns, configuration options, and best practices.
+
+## Basic initialization
+
+The WorkOS client can be initialized in multiple ways depending on your application architecture.
+
+### String-based initialization (server-side)
+
+The simplest initialization method for server-side applications:
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_...');
+```
+
+### Object-based initialization (server-side)
+
+For more control over configuration:
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS({ 
+  apiKey: 'sk_...', 
+  clientId: 'client_...' 
+});
+```
+
+### Public client initialization
+
+For browser, mobile, Electron, and CLI applications:
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+// No API key needed
+const workos = new WorkOS({ clientId: 'client_...' });
+```
+
+## Environment variables
+
+The SDK automatically reads configuration from environment variables:
+
+```bash
+WORKOS_API_KEY="sk_1234"
+WORKOS_CLIENT_ID="client_5678"
+```
+
+From [workos.ts:117](/home/daytona/workspace/source/src/workos.ts:117):
+
+```typescript
+if (!this.key) {
+  this.key = getEnv('WORKOS_API_KEY');
+}
+
+this.clientId = this.options.clientId;
+if (!this.clientId) {
+  this.clientId = getEnv('WORKOS_CLIENT_ID');
+}
+```
+
+<Info>
+Environment variables are checked only if the value is not explicitly provided during initialization.
+</Info>
+
+## Configuration options
+
+The `WorkOSOptions` interface provides several configuration options:
+
+### API key and client ID
+
+```typescript
+interface WorkOSOptions {
+  apiKey?: string;      // API key for server-side authentication
+  clientId?: string;    // OAuth 2.0 client ID
+}
+```
+
+### Protocol and hostname
+
+Customize the API endpoint (useful for testing or on-premise deployments):
+
+```typescript
+const workos = new WorkOS({
+  apiKey: 'sk_...',
+  https: false,                    // Use HTTP instead of HTTPS (default: true)
+  apiHostname: 'api.custom.com',   // Custom API hostname (default: 'api.workos.com')
+  port: 8080,                      // Custom port
+});
+```
+
+From [workos.ts:140](/home/daytona/workspace/source/src/workos.ts:140):
+
+```typescript
+const protocol: string = this.options.https ? 'https' : 'http';
+const apiHostname: string = this.options.apiHostname || DEFAULT_HOSTNAME;
+const port: number | undefined = this.options.port;
+this.baseURL = `${protocol}://${apiHostname}`;
+
+if (port) {
+  this.baseURL = this.baseURL + `:${port}`;
+}
+```
+
+### Request timeout
+
+Set a custom timeout for API requests:
+
+```typescript
+const workos = new WorkOS({
+  apiKey: 'sk_...',
+  timeout: 30000, // 30 seconds (in milliseconds)
+});
+```
+
+### Custom headers
+
+Add custom headers to all API requests:
+
+```typescript
+const workos = new WorkOS({
+  apiKey: 'sk_...',
+  config: {
+    headers: {
+      'X-Custom-Header': 'custom-value',
+    },
+  },
+});
+```
+
+### Application info
+
+Add your application name and version to the User-Agent header for debugging:
+
+```typescript
+const workos = new WorkOS({
+  apiKey: 'sk_...',
+  appInfo: {
+    name: 'MyApp',
+    version: '1.0.0',
+  },
+});
+```
+
+From [workos.ts:162](/home/daytona/workspace/source/src/workos.ts:162):
+
+```typescript
+private createUserAgent(options: WorkOSOptions): string {
+  let userAgent: string = `workos-node/${VERSION}`;
+
+  const { name: runtimeName, version: runtimeVersion } = getRuntimeInfo();
+  userAgent += ` (${runtimeName}${runtimeVersion ? `/${runtimeVersion}` : ''})`;
+
+  if (options.appInfo) {
+    const { name, version } = options.appInfo;
+    userAgent += ` ${name}: ${version}`;
+  }
+
+  return userAgent;
+}
+```
+
+## Validation and errors
+
+The WorkOS client validates configuration during initialization:
+
+### Missing credentials
+
+At least an API key or client ID must be provided:
+
+```typescript
+// This will throw an error
+try {
+  const workos = new WorkOS();
+} catch (error) {
+  console.error(error.message);
+  // "WorkOS requires either an API key or a clientId.
+  // For server-side: new WorkOS(\"sk_...\") or new WorkOS({ apiKey: \"sk_\" }).
+  // For PKCE/public clients: new WorkOS({ clientId: \"client_\" })"
+}
+```
+
+From [workos.ts:132](/home/daytona/workspace/source/src/workos.ts:132):
+
+```typescript
+if (!this.hasApiKey && !this.clientId) {
+  throw new Error(
+    'WorkOS requires either an API key or a clientId. ' +
+      'For server-side: new WorkOS("sk_...") or new WorkOS({ apiKey: "sk_..." }). ' +
+      'For PKCE/public clients: new WorkOS({ clientId: "client_..." })',
+  );
+}
+```
+
+## Available modules
+
+Once initialized, the WorkOS client provides access to all SDK modules:
+
+```typescript
+const workos = new WorkOS('sk_...');
+
+// User Management
+workos.userManagement.getUser('user_...');
+
+// Organizations
+workos.organizations.listOrganizations();
+
+// Directory Sync
+workos.directorySync.listDirectories();
+
+// SSO
+workos.sso.getConnection('conn_...');
+
+// Audit Logs
+workos.auditLogs.createEvent({
+  organization_id: 'org_...',
+  event: { action: 'user.login' },
+});
+
+// MFA
+workos.mfa.challengeFactor('auth_factor_...');
+
+// Admin Portal
+workos.portal.generateLink({ ... });
+
+// Webhooks
+workos.webhooks.constructEvent({ ... });
+
+// FGA (Fine-Grained Authorization)
+workos.fga.check({ ... });
+
+// PKCE utilities
+const pkce = await workos.pkce.generate();
+```
+
+From [workos.ts:67](/home/daytona/workspace/source/src/workos.ts:67):
+
+```typescript
+readonly actions: Actions;
+readonly apiKeys = new ApiKeys(this);
+readonly auditLogs = new AuditLogs(this);
+readonly authorization = new Authorization(this);
+readonly directorySync = new DirectorySync(this);
+readonly events = new Events(this);
+readonly featureFlags = new FeatureFlags(this);
+readonly fga = new FGA(this);
+readonly mfa = new Mfa(this);
+readonly organizations = new Organizations(this);
+readonly organizationDomains = new OrganizationDomains(this);
+readonly passwordless = new Passwordless(this);
+readonly pipes = new Pipes(this);
+readonly portal = new Portal(this);
+readonly sso = new SSO(this);
+readonly userManagement: UserManagement;
+readonly vault = new Vault(this);
+readonly webhooks: Webhooks;
+readonly widgets = new Widgets(this);
+```
+
+## SDK version
+
+Retrieve the current SDK version:
+
+```typescript
+const workos = new WorkOS('sk_...');
+console.log(workos.version); // e.g., "8.2.0"
+```
+
+## Complete example
+
+Here's a complete example with all configuration options:
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS({
+  // Authentication
+  apiKey: process.env.WORKOS_API_KEY,
+  clientId: process.env.WORKOS_CLIENT_ID,
+
+  // API endpoint (optional)
+  https: true,
+  apiHostname: 'api.workos.com',
+  port: undefined,
+
+  // Request configuration
+  timeout: 30000,
+  config: {
+    headers: {
+      'X-App-Version': '1.0.0',
+    },
+  },
+
+  // Application info for debugging
+  appInfo: {
+    name: 'MyApp',
+    version: '1.0.0',
+  },
+});
+
+// The client is now ready to use
+const user = await workos.userManagement.getUser('user_...');
+```
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Use environment variables" icon="key">
+    Always use environment variables for API keys and client IDs. Never hardcode credentials.
+  </Card>
+  <Card title="Initialize once" icon="circle-1">
+    Create a single WorkOS instance and reuse it throughout your application.
+  </Card>
+  <Card title="Set app info" icon="tag">
+    Include your application name and version for easier debugging with WorkOS support.
+  </Card>
+  <Card title="Configure timeouts" icon="clock">
+    Set appropriate timeouts based on your application's requirements and network conditions.
+  </Card>
+</CardGroup>
+
+## Related resources
+
+- [Authentication](/concepts/authentication)
+- [PKCE flow](/concepts/pkce-flow)
+- [Error handling](/concepts/error-handling)

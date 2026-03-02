@@ -1,0 +1,534 @@
+---
+title: TypeScript Support
+description: TypeScript configuration, types, and best practices for the WorkOS Node SDK
+---
+
+The WorkOS Node SDK is written in TypeScript and provides comprehensive type definitions out of the box.
+
+## Overview
+
+The SDK includes:
+
+- Full TypeScript source code
+- Exported type definitions for all interfaces
+- Strict type checking enabled
+- IDE autocomplete support
+- Discriminated unions for type safety
+
+## Requirements
+
+- TypeScript 5.9.3 or higher (recommended)
+- Node.js 20.15.0 or higher
+- ESM or CommonJS module support
+
+## Installation
+
+Types are included automatically when you install the SDK:
+
+```bash
+npm install @workos-inc/node
+```
+
+No separate `@types` package is needed.
+
+## Configuration
+
+### Recommended tsconfig.json
+
+The SDK is built with strict type checking. We recommend similar settings:
+
+```json tsconfig.json
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "noImplicitAny": true,
+    "noFallthroughCasesInSwitch": true,
+    "lib": ["es2022"]
+  }
+}
+```
+
+### ESM vs CommonJS
+
+The SDK supports both module systems with proper type definitions.
+
+<CodeGroup>
+```json ESM (package.json)
+{
+  "type": "module"
+}
+```
+
+```json CommonJS (package.json)
+{
+  "type": "commonjs"
+}
+```
+</CodeGroup>
+
+## Type Definitions
+
+### Core Types
+
+The SDK exports all core types for use in your application.
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+import type {
+  User,
+  Organization,
+  OrganizationMembership,
+  Connection,
+  DirectoryUser,
+  DirectoryGroup,
+} from '@workos-inc/node';
+
+const workos = new WorkOS('sk_...');
+
+// Type-safe function
+async function getUser(userId: string): Promise<User> {
+  return await workos.userManagement.getUser({ userId });
+}
+```
+
+### Interface Examples
+
+#### User Interface
+
+```typescript
+interface User {
+  object: 'user';
+  id: string;
+  email: string;
+  emailVerified: boolean;
+  profilePictureUrl: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  lastSignInAt: string | null;
+  locale: string | null;
+  createdAt: string;
+  updatedAt: string;
+  externalId: string | null;
+  metadata: Record<string, string>;
+}
+```
+
+#### Organization Interface
+
+```typescript
+interface Organization {
+  object: 'organization';
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  metadata: Record<string, any>;
+}
+```
+
+#### Directory User Interface
+
+```typescript
+interface DirectoryUser {
+  id: string;
+  idpId: string;
+  directoryId: string;
+  organizationId: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  state: 'active' | 'inactive';
+  customAttributes?: {
+    emails?: Array<{
+      type?: string;
+      value?: string;
+      primary?: boolean;
+    }>;
+    username?: string;
+    jobTitle?: string;
+    [key: string]: any;
+  };
+  rawAttributes: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+### Options Types
+
+All SDK methods accept typed options objects.
+
+```typescript
+import type {
+  GetUserOptions,
+  ListUsersOptions,
+  CreateUserOptions,
+  UpdateUserOptions,
+} from '@workos-inc/node';
+
+// Create user with type safety
+const options: CreateUserOptions = {
+  email: 'user@example.com',
+  firstName: 'Jane',
+  lastName: 'Doe',
+  emailVerified: true,
+};
+
+const user = await workos.userManagement.createUser(options);
+```
+
+### List Response Types
+
+Paginated list responses use a generic `List` type.
+
+```typescript
+import type { List, User } from '@workos-inc/node';
+
+const response: List<User> = await workos.userManagement.listUsers({
+  limit: 10,
+});
+
+console.log(response.data); // User[]
+console.log(response.listMetadata); // { before: string, after: string }
+```
+
+## Type-Safe Client Modes
+
+### Discriminated Client Types
+
+Use `createWorkOS()` for compile-time type safety based on client mode.
+
+```typescript
+import { createWorkOS } from '@workos-inc/node';
+
+// Public client - type system restricts available methods
+const publicClient = createWorkOS({ 
+  clientId: 'client_123' 
+});
+
+// Only PKCE methods are available
+publicClient.userManagement.getAuthorizationUrlWithPKCE({ ... }); // ✅
+publicClient.userManagement.listUsers(); // ❌ Type error
+
+// Confidential client - full API access
+const serverClient = createWorkOS({ 
+  apiKey: 'sk_...', 
+  clientId: 'client_123' 
+});
+
+// All methods available
+serverClient.userManagement.getAuthorizationUrlWithPKCE({ ... }); // ✅
+serverClient.userManagement.listUsers(); // ✅
+```
+
+### Type Guards
+
+The SDK uses TypeScript discriminated unions for type safety.
+
+```typescript
+import type { SSOAuthorizationURLOptions } from '@workos-inc/node';
+
+// Type system enforces mutually exclusive options
+const options: SSOAuthorizationURLOptions = {
+  connection: 'conn_123', // Only ONE of: connection, organization, or provider
+  redirectUri: 'https://example.com/callback',
+};
+
+// This would be a TypeScript error:
+// const invalid = {
+//   connection: 'conn_123',
+//   organization: 'org_456', // ❌ Cannot specify both
+//   redirectUri: 'https://example.com/callback',
+// };
+```
+
+## Generic Types
+
+### Webhook Events
+
+Webhook events use discriminated unions based on event type.
+
+```typescript
+import type { WebhookEvent } from '@workos-inc/node';
+
+function handleWebhook(event: WebhookEvent) {
+  // TypeScript narrows the type based on event.event
+  switch (event.event) {
+    case 'user.created':
+      // event.data is typed as User
+      console.log(event.data.email);
+      break;
+    
+    case 'connection.activated':
+      // event.data is typed as Connection
+      console.log(event.data.connectionType);
+      break;
+    
+    case 'dsync.deleted':
+      // event.data is typed as Directory
+      console.log(event.data.id);
+      break;
+  }
+}
+```
+
+### Custom Metadata
+
+Metadata fields use generic Record types.
+
+```typescript
+import type { Organization } from '@workos-inc/node';
+
+const org: Organization = await workos.organizations.createOrganization({
+  name: 'Acme Corp',
+});
+
+// metadata is Record<string, any>
+const customField: string = org.metadata.customField;
+```
+
+For stricter typing, define your own metadata interface:
+
+```typescript
+interface CustomMetadata {
+  tier: 'free' | 'pro' | 'enterprise';
+  accountManager?: string;
+  renewalDate?: string;
+}
+
+interface OrganizationWithMetadata extends Omit<Organization, 'metadata'> {
+  metadata: CustomMetadata;
+}
+
+const org = await workos.organizations.createOrganization({
+  name: 'Acme Corp',
+  metadata: {
+    tier: 'enterprise',
+    accountManager: 'Jane Doe',
+  },
+}) as OrganizationWithMetadata;
+
+console.log(org.metadata.tier); // Type-safe: 'free' | 'pro' | 'enterprise'
+```
+
+## IDE Support
+
+### Autocomplete
+
+The SDK provides full autocomplete in modern IDEs:
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_...');
+
+// IDE shows all available modules
+workos.userManagement. // Autocomplete shows: getUser, listUsers, createUser, etc.
+```
+
+### JSDoc Documentation
+
+All methods include JSDoc comments for inline documentation:
+
+```typescript
+/**
+ * Get a user by ID.
+ *
+ * @param options - Options for getting a user
+ * @param options.userId - The ID of the user to get
+ * @returns The user object
+ *
+ * @example
+ * const user = await workos.userManagement.getUser({ 
+ *   userId: 'user_123' 
+ * });
+ */
+getUser(options: GetUserOptions): Promise<User>
+```
+
+### Type Imports
+
+Use `import type` for type-only imports (recommended for better tree-shaking):
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+import type { 
+  User, 
+  Organization, 
+  CreateUserOptions 
+} from '@workos-inc/node';
+```
+
+## Runtime Types
+
+### Cloudflare Workers
+
+Use the `/worker` export for edge runtime types:
+
+```typescript
+import { WorkOS } from '@workos-inc/node/worker';
+import type { User } from '@workos-inc/node/worker';
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    const workos = new WorkOS(env.WORKOS_API_KEY);
+    const user: User = await workos.userManagement.getUser({ 
+      userId: 'user_123' 
+    });
+    return Response.json(user);
+  },
+};
+```
+
+### Deno
+
+Deno works with standard TypeScript imports:
+
+```typescript
+import { WorkOS } from 'npm:@workos-inc/node';
+import type { User } from 'npm:@workos-inc/node';
+
+const workos = new WorkOS(Deno.env.get('WORKOS_API_KEY'));
+const user: User = await workos.userManagement.getUser({ 
+  userId: 'user_123' 
+});
+```
+
+## Type Checking
+
+### Compiler Settings
+
+The SDK is built with these strict compiler options:
+
+```json
+{
+  "compilerOptions": {
+    "strict": true,
+    "noImplicitAny": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "alwaysStrict": true
+  }
+}
+```
+
+### Type Checking Commands
+
+Check types without emitting files:
+
+```bash
+# Check types only
+npx tsc --noEmit
+
+# Watch mode
+npx tsc --noEmit --watch
+```
+
+## Common Patterns
+
+### Async/Await with Types
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+import type { User, Organization } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_...');
+
+async function getUserWithOrg(userId: string): Promise<{
+  user: User;
+  organization: Organization | null;
+}> {
+  const user = await workos.userManagement.getUser({ userId });
+  
+  const memberships = await workos.userManagement.listOrganizationMemberships({
+    userId,
+    limit: 1,
+  });
+  
+  const organizationId = memberships.data[0]?.organizationId;
+  
+  const organization = organizationId
+    ? await workos.organizations.getOrganization({ organizationId })
+    : null;
+  
+  return { user, organization };
+}
+```
+
+### Error Handling with Types
+
+```typescript
+import { WorkOS } from '@workos-inc/node';
+import type { User } from '@workos-inc/node';
+
+const workos = new WorkOS('sk_...');
+
+async function safeGetUser(userId: string): Promise<User | null> {
+  try {
+    return await workos.userManagement.getUser({ userId });
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('not found')) {
+      return null;
+    }
+    throw error;
+  }
+}
+```
+
+### Type Narrowing
+
+```typescript
+import type { DirectoryUser } from '@workos-inc/node';
+
+function getPrimaryEmail(user: DirectoryUser): string | null {
+  const emails = user.customAttributes?.emails;
+  
+  if (!emails || !Array.isArray(emails)) {
+    return null;
+  }
+  
+  const primary = emails.find(e => e.primary);
+  return primary?.value ?? emails[0]?.value ?? null;
+}
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use Type Imports" icon="file-import">
+    Prefer `import type` for type-only imports to improve tree-shaking and build performance.
+  </Card>
+  
+  <Card title="Enable Strict Mode" icon="shield-check">
+    Use `strict: true` in tsconfig.json for better type safety and error detection.
+  </Card>
+  
+  <Card title="Define Custom Types" icon="code">
+    Extend SDK types with your own interfaces for domain-specific metadata and fields.
+  </Card>
+  
+  <Card title="Type Guards" icon="filter">
+    Use type guards and discriminated unions for safer runtime type checking.
+  </Card>
+</CardGroup>
+
+## Resources
+
+- [SDK Source Code](https://github.com/workos/workos-node/tree/main/src)
+- [TypeScript Handbook](https://www.typescriptlang.org/docs/handbook/intro.html)
+- [Type Definitions](https://github.com/workos/workos-node/tree/main/src)
+
+## Need Help?
+
+Having TypeScript issues?
+
+- Check the [GitHub repository](https://github.com/workos/workos-node) for examples
+- [Open an issue](https://github.com/workos/workos-node/issues) for type definition bugs
+- Contact [support@workos.com](mailto:support@workos.com)
